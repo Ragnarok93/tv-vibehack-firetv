@@ -1,0 +1,31 @@
+# Ads and shopping promotions disabled on INSIGNIA NS-55DF710NA19.
+# pm disable-user --user 0. The Amazon launcher is not in this list.
+# Fire OS refused these protected packages, so they are still enabled:
+#   com.amazon.ftvads.deeplinking
+#   com.amazon.adep
+#   com.amazon.device.metrics
+#   com.amazon.client.metrics
+#   com.amazon.device.crashmanager
+#   com.fireos.usagestats.proxy
+com.amazon.kso.blackbird
+com.amazon.cardinal
+com.amazon.device.sale.service
+com.amazon.shoptv.client
+com.amazon.shoptv.firetv.client
+# Telemetry and analytics. Core metrics, crash reports, and usage stats are protected.
+com.amazon.tv.fw.metrics
+com.amazon.wirelessmetrics.service
+com.amazon.perfcollection
+# com.amazon.aria is the Alexa runtime on Fire OS 8. It was disabled, then turned back on.
+# Extra Amazon apps: Photos, Music, games, Mini TV, shopping, tutorials, demo, sneak-peek
+com.amazon.bueller.photos
+com.amazon.bueller.music
+com.amazon.gamehub
+com.amazon.minitv.android.app
+com.amazon.alexashopping
+com.amazon.storm.lightning.tutorial
+com.amazon.tmm.tutorial
+com.amazon.tv.democontent.provider
+com.amazon.sneakpeek
+# Freevee
+com.amazon.imdb.tv.android.app

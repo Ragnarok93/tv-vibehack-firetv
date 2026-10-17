@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher configuration. Edit this file, then run launcher/build-and-install.sh.
+  Package names: on the TV run `pm list packages` (tools/tv.py 'pm list packages').
+-->
+<resources>
+
+    <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
+    <string-array name="dock_apps">
+        <item>com.amazon.firetv.youtube</item>
+        <item>org.jellyfin.androidtv</item>
+        <item>ar.tvplayer.tv</item>
+        <item>tv.pluto.android</item>
+    </string-array>
+
+    <!-- Apps never shown as tiles. -->
+    <string-array name="hidden_apps">
+        <item>com.amazon.tv.launcher</item>
+        <item>com.amazon.avod</item>
+        <item>com.amazon.tv.localgallery</item>
+        <item>com.amazon.ftv.profilepicker</item>
+        <item>com.amazon.ftv.screensaver</item>
+        <item>com.amazon.vizzini.ftvcds</item>
+        <item>com.amazon.tahoe</item>
+        <item>com.amazon.hedwig</item>
+        <item>com.amazon.ssm</item>
+        <item>com.imdb.livingroom.firetv</item>
+        <item>com.android.documentsui</item>
+        <item>com.android.providers.downloads.ui</item>
+        <item>com.koushikdutta.cast.receiver</item>
+        <item>de.twokit.screen.mirror</item>
+        <item>com.esaba.downloader</item>
+    </string-array>
+
+    <!-- Show apps that only declare the phone LAUNCHER category (most Amazon apps on Fire OS). -->
+    <bool name="include_phone_launcher_apps">true</bool>
+
+    <!--
+      App opened by the remote's TV button (Fire OS sends it as a livetv:// link) and listed in the
+      Inputs menu. Leave empty to keep the button doing nothing.
+    -->
+    <string name="live_tv_package" translatable="false">com.xumo.xumo.tv</string>
+
+    <!-- Tiles per row in the grid; the dock always has this many slots. -->
+    <integer name="columns">4</integer>
+</resources>

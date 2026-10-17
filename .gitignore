@@ -1,0 +1,14 @@
+tools/venv/
+tools/adbkey/
+tools/__pycache__/
+launcher/.gradle/
+launcher/build/
+launcher/app/build/
+launcher/local.properties
+# your own TV's dumps (serial, android_id, device names) stay local
+backup/
+# third-party APKs sideloaded onto the TV, and vendor APKs or material extracted from them
+apks/
+evidence/
+reference/
+.DS_Store

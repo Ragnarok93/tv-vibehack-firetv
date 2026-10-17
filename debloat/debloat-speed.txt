@@ -1,0 +1,33 @@
+# Speed pass on INSIGNIA NS-55DF710NA19, after the tvOS-style launcher was installed.
+# pm disable-user --user 0. Undo with restore-speed.sh in debloat/.
+# Kept on purpose: casting (whisperlink, whisperjoin), OTA updates, inputs, Amazon launcher (protected).
+
+# Leftovers
+com.amazon.hybridadidservice
+com.amazon.tv.releasenotes
+# com.amazon.tv.csapp: Fire OS refused (protected package), still enabled
+com.android.htmlviewer
+com.amazon.tv.localgallery
+com.android.printspooler
+com.amazon.tahoe
+com.imdb.livingroom.firetv
+com.svox.pico
+
+# Amazon Live TV and the antenna guide (HDMI and AV play through the launcher's Inputs menu)
+com.amazon.tv.livetv
+com.amazon.tv.channelscan
+com.amazon.hedwig
+
+# Prime Video
+com.amazon.firebat
+com.amazon.avod
+
+# Alexa
+com.amazon.vizzini   # Fire OS re-enables this one at every boot; it keeps running (~40 MB)
+com.amazon.vizzini.ftvcds
+com.amazon.alexamediaplayer.runtime.ftv
+com.amazon.alexa.externalmediaplayer.fireos
+com.amazon.tv.alexaalerts
+com.amazon.tv.alexanotifications
+com.amazon.alexa.datastore.app
+com.amazon.aria
