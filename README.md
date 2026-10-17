@@ -77,7 +77,7 @@ That applies both lists, turns off interest-based ads and halves animation lengt
 TV_HOST=192.168.1.50 launcher/build-and-install-fire.sh
 ```
 
-This builds the APK, installs it, and grants its two special permissions over ADB: `READ_LOGS` (with `pm grant`) and `SYSTEM_ALERT_WINDOW` (with `appops`). Set your dock, hidden apps and TV-button app in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml), then run the script again.
+This builds the APK, installs it, grants its two special permissions over ADB (`READ_LOGS` with `pm grant`, `SYSTEM_ALERT_WINDOW` with `appops`), and starts the fast-Home helper (see below). Set your dock, hidden apps and TV-button app in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml), then run the script again.
 
 ![App grid](screenshots/grid.jpg)
 
@@ -95,7 +95,27 @@ Fire OS always sends the Home button to `com.amazon.tv.launcher`. That package i
 
 What works is reading the system log, which needs `READ_LOGS`. Each Home press logs `FireTVKeyPolicyManager.handleShortPressOnHome` in the **system** buffer, not the main buffer. Amazon's home also logs `am_focused_activity` in the events buffer when it gets focus. The launcher's `HomeKeyService` watches for both lines and brings the launcher forward.
 
-Android then delays app launches for 5 seconds after a Home press, unless the app is Amazon-signed. To hide the delay, the service immediately draws a snapshot of the launcher as a system overlay, which swallows key presses until the real launcher arrives. In practice you see Amazon's home for about half a second, then the launcher, which stays non-interactive for up to 5 seconds.
+Android then holds app launches for 5 seconds after a Home press. You can see it in the log as `Activity start request from <uid> stopped`. Only callers with the `STOP_APP_SWITCHES` permission skip the hold. Ordinary apps can't get it, but the ADB shell user (uid 2000) already has it.
+
+So the launcher ships a small helper, `ShellHome`, that runs as the shell user. It's started from the APK with `app_process` and listens on 127.0.0.1:38275. When `HomeKeyService` sees a Home press, it asks the helper to open the launcher. The helper calls the activity manager directly as `com.android.shell`, so there's no hold. `HomeKeyService` also covers Amazon's home with a snapshot of the launcher as a system overlay. That overlay stops taking key presses as soon as the real launcher resumes, and fades out once the tiles are back.
+
+| Home press to launcher focus | Time |
+|---|---|
+| App starting it itself (held) | about 5 s |
+| `am start` from a shell script | about 1.7 s (mostly `am` starting up) |
+| `ShellHome` helper | 0.23 to 0.40 s |
+
+```bash
+TV_HOST=192.168.1.50 tools/fast-home.sh   # prints "pong 1" when the helper is running
+```
+
+`build-and-install-fire.sh` runs this for you. **After a reboot of the TV, run it again from your computer.** Until you do, Home still works, but with the 5-second hold. Things learned getting the helper to start and stay up:
+
+- **Fire OS refuses ADB connections from the TV itself**, both on 127.0.0.1:5555 and on the TV's own LAN address. An app can't start the helper after a boot, so it has to come from a computer.
+- **Processes started over ADB die when the session closes** unless they are detached in time. `setsid nohup … &` plus a `sleep 1` before the session ends keeps them alive; they are then reparented to `init`.
+- **`app_process --nice-name=tvhome-shell`** only changes the command line. Find the helper with `pidof tvhome-shell`, not `pkill tvhome-shell`. Don't use `pkill -f`: it also matches the shell running it and ends your ADB session.
+- **The shell has no `awk`**, and `nc` is only available as `toybox nc`.
+- Any local app can connect to the helper. Its only commands are "open this launcher" and "ping", so that's harmless.
 
 Things that still go to Amazon:
 
@@ -143,6 +163,7 @@ The free Pluto, Samsung TV Plus, Plex and Roku channel playlists that used to be
 | [`tools/tv.py`](tools/tv.py) | Pure-Python ADB client: one command, `--batch`, `--probe`, `--pull` |
 | [`tools/b64push.py`](tools/b64push.py) | Pushes APKs in base64 chunks with an md5 check |
 | [`tools/disable.sh`](tools/disable.sh) | Disables every package in one list |
+| [`tools/fast-home.sh`](tools/fast-home.sh) | Starts the fast-Home helper (run again after every reboot) |
 | [`screenshots/`](screenshots/) | Taken on the TV with `screencap` |
 
 ## Contributing

@@ -9,6 +9,8 @@
     <!-- Needed on Android 10 to read the Wi-Fi network name; granted over adb at install time. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Localhost only: HomeKeyService asks ShellHome (127.0.0.1) to open this home screen. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Granted over adb (pm grant). Lets HomeKeyService see when Fire OS opens Amazon's home. -->
     <uses-permission android:name="android.permission.READ_LOGS" />
     <!-- Granted over adb (appops). Covers Amazon's home for the 5 s Android holds activity starts after Home. -->

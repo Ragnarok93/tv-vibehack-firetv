@@ -24,4 +24,6 @@ printf '%s\n' \
   "appops set com.gathin.tvhome SYSTEM_ALERT_WINDOW allow" \
   "am start -n com.gathin.tvhome/.MainActivity" \
   | "$PY" -I ../tools/tv.py --batch
+../tools/fast-home.sh
 echo "Installed. Press Home on the remote to see it."
+echo "After a reboot of the TV, run tools/fast-home.sh again (Home takes 5 s until you do)."

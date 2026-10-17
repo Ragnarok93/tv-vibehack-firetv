@@ -16,6 +16,11 @@ import android.widget.ImageView;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Brings this home screen forward when Fire OS shows Amazon's home.
@@ -35,14 +40,17 @@ public class HomeKeyService extends Service {
     private static final String[] SETTINGS_PREFIXES = {"com.amazon.tv.settings", "com.amazon.tv.launcher/.ui.Settings"};
 
     /**
-     * Android holds activity starts for 5 s after Home unless the caller has STOP_APP_SWITCHES (Amazon only).
-     * Overlay windows aren't held, so a snapshot of this home screen covers Amazon's until the real one opens.
+     * Android holds activity starts for 5 s after Home unless the caller has STOP_APP_SWITCHES. ShellHome
+     * (running as the shell user, which has it) opens this screen without the hold; if it isn't running (it
+     * has to be started over adb again after a reboot) the start here is held. Either way a snapshot of this
+     * home screen covers Amazon's until the real one opens.
      */
     private static final long OVERLAY_MAX_MS = 7_000;
     private static Bitmap snapshot;
     private static HomeKeyService instance;
 
     private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Runnable removeOverlay = this::removeOverlay;
     private Thread reader;
     private Process logcat;
@@ -60,6 +68,11 @@ public class HomeKeyService extends Service {
     /** Called by MainActivity once it is on screen again. */
     static void homeVisible() {
         if (instance != null) instance.removeOverlay();
+    }
+
+    /** Called by MainActivity as soon as it resumes, before the overlay is removed. */
+    static void homeResumed() {
+        if (instance != null) instance.releaseOverlayInput();
     }
 
     static void start(Context ctx) {
@@ -130,8 +143,22 @@ public class HomeKeyService extends Service {
         lastShown = now;
         main.post(() -> {
             addOverlay();
-            showHome(this);
+            io.execute(() -> {
+                if (!askHelper("home").equals("ok")) main.post(() -> showHome(this));
+            });
         });
+    }
+
+    private static String askHelper(String cmd) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("127.0.0.1", ShellHome.PORT), 300);
+            s.setSoTimeout(1_000);
+            s.getOutputStream().write((cmd + "\n").getBytes(StandardCharsets.UTF_8));
+            String r = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8)).readLine();
+            return r == null ? "" : r;
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void addOverlay() {
@@ -158,6 +185,16 @@ public class HomeKeyService extends Service {
         }
     }
 
+    private void releaseOverlayInput() {
+        if (overlay == null) return;
+        WindowManager.LayoutParams lp = (WindowManager.LayoutParams) overlay.getLayoutParams();
+        lp.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        try {
+            ((WindowManager) getSystemService(WINDOW_SERVICE)).updateViewLayout(overlay, lp);
+        } catch (Exception ignored) {
+        }
+    }
+
     private void removeOverlay() {
         main.removeCallbacks(removeOverlay);
         if (overlay == null) return;
@@ -178,6 +215,7 @@ public class HomeKeyService extends Service {
     public void onDestroy() {
         running = false;
         if (logcat != null) logcat.destroy();
+        io.shutdown();
         removeOverlay();
         instance = null;
         super.onDestroy();

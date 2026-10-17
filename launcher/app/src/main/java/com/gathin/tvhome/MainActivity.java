@@ -190,7 +190,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         updateGreeting();
         updateWifiLabel();
         handler.postDelayed(minuteTick, MINUTE_MS);
-        // Keep the Home overlay up until the tiles and top shelf have faded back in.
+        // Keep the Home overlay up until the tiles and top shelf have faded back in, but let keys through now.
+        HomeKeyService.homeResumed();
         handler.postDelayed(dropHomeOverlay, 700);
 
         // Return to the tile we left from, or the first one.
