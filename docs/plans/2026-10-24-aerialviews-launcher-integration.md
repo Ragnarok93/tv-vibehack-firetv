@@ -86,7 +86,22 @@
 - [ ] **Step 2: Verify the manifest contract and both builds**; on a real Fire TV, confirm screensaver starts after idle, DPAD/Home input returns to the launcher, and no screensaver launch occurs after interaction or while another app is foregrounded.
 - [x] **Step 3: Open draft PRs** in both forks with build results and clearly identify any hardware-only verification that could not be run from CI.
 
+### Task 5: Add an on-device launcher settings menu
+
+**Files:**
+- Modify: `launcher/app/src/main/res/layout/activity_main.xml`
+- Modify: `launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java`
+- Modify: `launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java`
+- Modify: launcher strings, icon resources, and README
+- Add: `.github/workflows/launcher-android-build.yml`
+
+- [x] **Step 1: Add a Launcher button** beside the existing Android Settings button and open a D-pad-friendly popup menu.
+- [x] **Step 2: Persist launcher preferences** for AerialViews background/screensaver, idle delay, grid columns, phone-only apps, dock/hidden package lists, and Live TV package.
+- [x] **Step 3: Apply preference changes immediately** to playback, the screensaver timer, app filtering, dock ordering, and grid layout.
+- [x] **Step 4: Document the menu** and add a pull-request/push Gradle build workflow.
+- [ ] **Step 5: Verify the Gradle build and Fire TV runtime behavior**; a successful build and device smoke test remain required before marking this feature fully verified.
+
 ## Unresolved externally observable decisions
 
-- The initial idle timeout is set to 10 minutes as a conservative implementation default; making it user-configurable is intentionally outside this first integration unless existing launcher settings provide a natural supported preference seam.
+- The initial idle timeout defaults to 10 minutes and is configurable from the launcher's new Launcher settings menu.
 - The first implementation renders videos returned by AerialViews' existing providers; it does not attempt to embed AerialViews' own Activity surface. The separate full-screen idle screensaver uses the existing `TestActivity` entry point.
