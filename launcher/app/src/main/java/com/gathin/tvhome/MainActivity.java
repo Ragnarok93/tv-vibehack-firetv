@@ -290,6 +290,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     }
                     return;
                 }
+                player.setVolume(0f);
                 player.setMediaItems(items);
                 player.setRepeatMode(Player.REPEAT_MODE_ALL);
                 player.setShuffleModeEnabled(true);
