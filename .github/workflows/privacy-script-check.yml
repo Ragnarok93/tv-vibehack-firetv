@@ -1,0 +1,35 @@
+name: Privacy script checks
+
+on:
+  push:
+    branches:
+      - feature/privacy-dnsfilter-fireos6-20261024
+  pull_request:
+
+jobs:
+  shell-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: |
+          bash -n debloat/apply-fireos6-extras.sh
+          bash -n debloat/restore-fireos6-extras.sh
+          bash -n privacy/setup-firetv-privacy.sh
+          bash -n privacy/install-personaldnsfilter.sh
+          bash -n privacy/verify-personaldnsfilter.sh
+          bash -n privacy/disable-personaldnsfilter.sh
+      - name: Check package candidate list
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          packages = []
+          for line in Path("debloat/fireos6-extra-packages.txt").read_text().splitlines():
+              line = line.split("#", 1)[0].strip()
+              if line:
+                  assert all(c.isalnum() or c in "._" for c in line), line
+                  packages.append(line)
+          assert packages, "candidate list is empty"
+          assert len(packages) == len(set(packages)), "duplicate package entries"
+          print(f"Validated {len(packages)} unique package candidates")
+          PY
