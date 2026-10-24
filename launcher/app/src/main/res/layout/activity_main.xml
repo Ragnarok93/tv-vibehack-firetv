@@ -34,15 +34,17 @@
         android:paddingEnd="56dp"
         android:paddingTop="26dp">
 
-        <RelativeLayout
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
             <LinearLayout
                 android:id="@+id/leftBlock"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_alignParentStart="true"
+                android:layout_weight="1"
                 android:orientation="vertical">
 
                 <TextView
@@ -57,7 +59,7 @@
                     android:textAllCaps="true" />
 
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:baselineAligned="true">
@@ -100,7 +102,8 @@
 
                     <TextClock
                         android:id="@+id/date"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
                         android:layout_height="wrap_content"
                         android:layout_gravity="bottom"
                         android:layout_marginBottom="9dp"
@@ -110,7 +113,8 @@
                         android:textSize="14sp"
                         android:tag="w400"
                         android:letterSpacing="0.14"
-                        android:textAllCaps="true" />
+                        android:textAllCaps="true"
+                        android:ellipsize="end" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -118,9 +122,7 @@
                 android:id="@+id/topButtons"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:layout_alignBottom="@id/leftBlock"
-                android:layout_marginBottom="6dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
@@ -135,6 +137,8 @@
                     style="@style/TopButton"
                     android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
+                    android:maxWidth="150dp"
+                    android:ellipsize="end"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
@@ -152,7 +156,7 @@
                     android:drawableStart="@drawable/ic_settings"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
-        </RelativeLayout>
+        </LinearLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
         <FrameLayout

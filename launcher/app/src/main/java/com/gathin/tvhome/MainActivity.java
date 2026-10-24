@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -27,14 +28,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.content.SharedPreferences;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -624,12 +623,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             adapter.reload();
             refreshLauncherSettings();
         });
-        addLauncherSettingRow(panel, "Dock app packages", "Edit  ›",
-                () -> editPackageList("Dock app packages", PREF_DOCK_APPS, R.array.dock_apps));
-        addLauncherSettingRow(panel, "Hidden app packages", "Edit  ›",
-                () -> editPackageList("Hidden app packages", PREF_HIDDEN_APPS, R.array.hidden_apps));
-        addLauncherSettingRow(panel, "Live TV app package", liveTvPkg.isEmpty() ? "Not set" : "Edit  ›",
-                () -> editLiveTvPackage());
+        addLauncherSettingRow(panel, "Dock apps", "Choose  ›",
+                () -> choosePackageList("Choose dock apps", PREF_DOCK_APPS, R.array.dock_apps));
+        addLauncherSettingRow(panel, "Hidden apps", "Choose  ›",
+                () -> choosePackageList("Choose hidden apps", PREF_HIDDEN_APPS, R.array.hidden_apps));
+        addLauncherSettingRow(panel, "Live TV app", liveTvPkg.isEmpty() ? "Disabled" : "Choose  ›",
+                () -> chooseLiveTvApp());
 
         panel.setAlpha(0f);
         panel.setPivotY(0f);
@@ -683,63 +682,127 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         showLauncherSettings();
     }
 
-    private void editPackageList(String title, String key, int defaultArray) {
+    private static final class AppChoice {
+        final String packageName;
+        final String label;
+
+        AppChoice(String packageName, String label) {
+            this.packageName = packageName;
+            this.label = label;
+        }
+    }
+
+    /** Returns one selectable entry per installed app that exposes a TV or standard launcher activity. */
+    private List<AppChoice> installedAppChoices() {
+        PackageManager pm = getPackageManager();
+        List<ResolveInfo> found = new ArrayList<>();
+        found.addAll(pm.queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0));
+        found.addAll(pm.queryIntentActivities(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0));
+
+        Set<String> seen = new HashSet<>();
+        List<AppChoice> choices = new ArrayList<>();
+        for (ResolveInfo info : found) {
+            if (info.activityInfo == null) continue;
+            String packageName = info.activityInfo.packageName;
+            if (packageName.equals(getPackageName()) || !seen.add(packageName)) continue;
+            CharSequence loadedLabel = info.loadLabel(pm);
+            String label = loadedLabel == null ? packageName : loadedLabel.toString();
+            choices.add(new AppChoice(packageName, label));
+        }
+        Collections.sort(choices, (left, right) -> {
+            int byLabel = left.label.compareToIgnoreCase(right.label);
+            return byLabel != 0 ? byLabel : left.packageName.compareTo(right.packageName);
+        });
+        return choices;
+    }
+
+    private List<String> parsePackages(String value) {
+        List<String> packages = new ArrayList<>();
+        if (value == null || value.trim().isEmpty()) return packages;
+        for (String part : value.split(",")) {
+            String packageName = part.trim();
+            if (!packageName.isEmpty() && !packages.contains(packageName)) packages.add(packageName);
+        }
+        return packages;
+    }
+
+    /** Multi-select app picker for the dock and hidden-app list; no package-name typing required. */
+    private void choosePackageList(String title, String key, int defaultArray) {
         if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
-        String current = getPreferencesStore().getString(key,
-                joinPackages(getResources().getStringArray(defaultArray)));
-        EditText input = new EditText(this);
-        input.setSingleLine(false);
-        input.setMinLines(2);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        input.setText(current);
+        SharedPreferences prefs = getPreferencesStore();
+        String currentValue = prefs.getString(key, joinPackages(getResources().getStringArray(defaultArray)));
+        List<String> currentOrder = parsePackages(currentValue);
+        Set<String> selected = new HashSet<>(currentOrder);
+        List<AppChoice> apps = installedAppChoices();
+        CharSequence[] labels = new CharSequence[apps.size()];
+        boolean[] checked = new boolean[apps.size()];
+        for (int i = 0; i < apps.size(); i++) {
+            AppChoice app = apps.get(i);
+            labels[i] = app.label;
+            checked[i] = selected.contains(app.packageName);
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle(title)
-                .setMessage("Comma-separated Android package names")
-                .setView(input)
-                .setNegativeButton(android.R.string.cancel, (d, w) -> showLauncherSettings())
-                .setNeutralButton("Reset", (d, w) -> {
-                    getPreferencesStore().edit().remove(key).apply();
+                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
+                    String packageName = apps.get(which).packageName;
+                    if (isChecked) selected.add(packageName);
+                    else selected.remove(packageName);
+                })
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> showLauncherSettings())
+                .setNeutralButton("Reset", (dialog, which) -> {
+                    prefs.edit().remove(key).apply();
                     adapter.reload();
                     showLauncherSettings();
                 })
-                .setPositiveButton("Save", (d, w) -> {
-                    getPreferencesStore().edit().putString(key, input.getText().toString().trim()).apply();
+                .setPositiveButton("Save", (dialog, which) -> {
+                    // Preserve the user's existing dock order; append newly selected apps alphabetically.
+                    List<String> ordered = new ArrayList<>();
+                    for (String packageName : currentOrder) {
+                        if (selected.contains(packageName)) ordered.add(packageName);
+                    }
+                    for (AppChoice app : apps) {
+                        if (selected.contains(app.packageName) && !ordered.contains(app.packageName)) {
+                            ordered.add(app.packageName);
+                        }
+                    }
+                    prefs.edit().putString(key, joinPackages(ordered.toArray(new String[0]))).apply();
                     adapter.reload();
                     showLauncherSettings();
-                }).show();
+                })
+                .show();
     }
 
-    private String joinPackages(String[] packages) {
-        StringBuilder joined = new StringBuilder();
-        for (String pkg : packages) {
-            if (joined.length() > 0) joined.append(',');
-            joined.append(pkg);
-        }
-        return joined.toString();
-    }
-
-    private void editLiveTvPackage() {
+    /** Single-select app picker for the Live TV shortcut, with an explicit disable option. */
+    private void chooseLiveTvApp() {
         if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint("com.example.livetv");
-        input.setText(liveTvPkg);
+        List<AppChoice> apps = installedAppChoices();
+        CharSequence[] labels = new CharSequence[apps.size() + 1];
+        labels[0] = "Disabled";
+        int selectedIndex = 0;
+        for (int i = 0; i < apps.size(); i++) {
+            AppChoice app = apps.get(i);
+            labels[i + 1] = app.label;
+            if (app.packageName.equals(liveTvPkg)) selectedIndex = i + 1;
+        }
+        final int[] selected = {selectedIndex};
         new AlertDialog.Builder(this)
-                .setTitle("Live TV app package")
-                .setMessage("Leave blank to disable the Live TV shortcut.")
-                .setView(input)
-                .setNegativeButton(android.R.string.cancel, (d, w) -> showLauncherSettings())
-                .setNeutralButton("Reset", (d, w) -> {
+                .setTitle("Choose Live TV app")
+                .setSingleChoiceItems(labels, selectedIndex, (dialog, which) -> selected[0] = which)
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> showLauncherSettings())
+                .setNeutralButton("Reset", (dialog, which) -> {
                     liveTvPkg = getString(R.string.live_tv_package).trim();
                     getPreferencesStore().edit().remove(PREF_LIVE_TV_PACKAGE).apply();
                     showLauncherSettings();
                 })
-                .setPositiveButton("Save", (d, w) -> {
-                    liveTvPkg = input.getText().toString().trim();
+                .setPositiveButton("Save", (dialog, which) -> {
+                    liveTvPkg = selected[0] == 0 ? "" : apps.get(selected[0] - 1).packageName;
                     getPreferencesStore().edit().putString(PREF_LIVE_TV_PACKAGE, liveTvPkg).apply();
                     showLauncherSettings();
-                }).show();
+                })
+                .show();
     }
 
     /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */

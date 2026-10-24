@@ -156,6 +156,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public void onBindViewHolder(@NonNull Holder h, int position) {
         Entry e = items.get(position);
+        h.resizeTile(h.itemView);
         h.name.setText(e.label);
         h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
         h.name.setAlpha(0f);
@@ -263,6 +264,24 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         final TextView label;
         final TextView name;
 
+        void resizeTile(View item) {
+            float density = item.getResources().getDisplayMetrics().density;
+            int available = item.getWidth() - Math.round(12f * density);
+            if (available <= 0) return;
+            int tileWidth = Math.min(Math.round(180f * density), available);
+
+            ViewGroup.LayoutParams cardParams = card.getLayoutParams();
+            if (cardParams.width != tileWidth) {
+                cardParams.width = tileWidth;
+                card.setLayoutParams(cardParams);
+            }
+            ViewGroup.LayoutParams nameParams = name.getLayoutParams();
+            if (nameParams.width != tileWidth) {
+                nameParams.width = tileWidth;
+                name.setLayoutParams(nameParams);
+            }
+        }
+
         Holder(View v, TileListener listener) {
             super(v);
             card = v.findViewById(R.id.card);
@@ -271,6 +290,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
             Fonts.apply(v);
+            v.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                    resizeTile(view));
 
             final float density = v.getResources().getDisplayMetrics().density;
             final float radius = density * 16f;
