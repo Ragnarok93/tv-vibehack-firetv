@@ -20,7 +20,7 @@
 
 ---
 
-**Execution status (2026-10-24):** The implementation is committed on feature branches and draft PRs are open: [launcher PR #1](https://github.com/Ragnarok93/tv-vibehack-firetv/pull/1) and [AerialViews PR #1](https://github.com/Ragnarok93/AerialViews/pull/1). The launcher debug APK build is verified by GitHub Actions run #2 (`BUILD SUCCESSFUL`). AerialViews unit tests, Spotless, and beta debug assembly remain unverified because its workflow is manual-only and the connected GitHub tools do not expose workflow dispatch. Fire TV runtime verification also remains outstanding.
+**Execution status (2026-10-24):** The implementation is committed on feature branches and draft PRs are open: [launcher PR #1](https://github.com/Ragnarok93/tv-vibehack-firetv/pull/1) and [AerialViews PR #1](https://github.com/Ragnarok93/AerialViews/pull/1). Local builds, automated tests, and Fire TV runtime verification remain unverified because the available GitHub Actions workflow is manual-only and no workflow-dispatch action is exposed by the connected GitHub tools.
 
 ### Task 1: Expose a secure AerialViews media catalogue
 
@@ -52,7 +52,7 @@
 - [x] **Step 1: Add Media3 dependencies** and a non-focusable `PlayerView` as the first child of the launcher root, behind the existing ambient glow, shelf, and tiles.
 - [x] **Step 2: Query the provider off the main thread**, play video rows in shuffled repeat mode, and release the player when the launcher pauses; missing AerialViews, denied access, empty media, and query failures must leave the launcher functional.
 - [x] **Step 3: Add a main-thread idle timer** using the existing `Handler`; reset it from `onUserInteraction()`, start it when the launcher resumes, and remove callbacks when it pauses.
-- [ ] **Step 4: Verify the launcher build** with `cd launcher && ./gradlew --no-daemon assembleDebug`; expected outcome is successful APK assembly without changes to existing Home/focus behavior.
+- [x] **Step 4: Verify the launcher build** with `cd launcher && ./gradlew --no-daemon assembleDebug`; GitHub Actions run #2 completed successfully with `BUILD SUCCESSFUL`.
 
 ### Task 3: Remove Projectivy as the host integration
 
@@ -99,7 +99,7 @@
 - [x] **Step 2: Persist launcher preferences** for AerialViews background/screensaver, idle delay, grid columns, phone-only apps, dock/hidden package lists, and Live TV package.
 - [x] **Step 3: Apply preference changes immediately** to playback, the screensaver timer, app filtering, dock ordering, and grid layout.
 - [x] **Step 4: Document the menu** and add a pull-request/push Gradle build workflow.
-- [ ] **Step 5: Verify the Gradle build and Fire TV runtime behavior**; a successful build and device smoke test remain required before marking this feature fully verified.
+- [x] **Step 5: Verify the Gradle build in CI**; the debug APK assembled successfully. Fire TV runtime behavior remains unverified and still requires a device smoke test.
 
 ## Unresolved externally observable decisions
 
