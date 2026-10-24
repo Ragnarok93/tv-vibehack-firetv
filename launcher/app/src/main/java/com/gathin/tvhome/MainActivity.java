@@ -32,11 +32,14 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.TextureView;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.ArrayAdapter;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -81,6 +84,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final String PREF_HIDDEN_APPS = "hidden_apps";
     private static final String PREF_LIVE_TV_PACKAGE = "live_tv_package";
     private static final String PREF_COLUMNS = "columns";
+    private static final String PREF_TEXT_MODE = "home_text_color_mode";
+    private static final String TEXT_MODE_ADAPTIVE = "adaptive";
+    private static final String TEXT_MODE_SOLID_WHITE = "solid_white";
     private static final String AERIAL_VIEWS_PACKAGE = "com.neilturner.aerialviews";
     private static final String AERIAL_VIEWS_SCREENSAVER_ACTION = "com.gathin.tvhome.action.START_SCREENSAVER";
     private boolean launcherResumed;
@@ -116,7 +122,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private float density;
     private Bitmap snapshot;
     private PlayerView backgroundPlayerView;
+    private TextureView backgroundTextureView;
     private ExoPlayer backgroundPlayer;
+    private int overlayTextColor = Color.WHITE;
+    private final Runnable adaptiveTextTick = new Runnable() {
+        @Override
+        public void run() {
+            updateAdaptiveTextColor();
+            if (backgroundPlayer != null && backgroundPlayer.isPlaying()) {
+                handler.postDelayed(this, 1200L);
+            }
+        }
+    };
     private final ExecutorService wallpaperExecutor = Executors.newSingleThreadExecutor();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -146,6 +163,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         backgroundPlayerView.setKeepContentOnPlayerReset(true);
         backgroundPlayerView.setFocusable(false);
         backgroundPlayerView.setFocusableInTouchMode(false);
+        backgroundTextureView = new TextureView(this);
+        backgroundPlayerView.setVideoTextureView(backgroundTextureView);
         backgroundPlayerView.setVisibility(View.GONE);
         root.addView(backgroundPlayerView, 0, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -171,6 +190,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
         adapter = new AppAdapter(this, this, COLUMNS);
         grid.setAdapter(adapter);
+        adapter.setOverlayTextColor(overlayTextColor);
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -313,17 +333,77 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 player.prepare();
                 player.play();
                 backgroundPlayerView.setVisibility(View.VISIBLE);
+                ambient.animate().cancel();
+                ambient.setAlpha(0f);
+                updateAdaptiveTextColor();
+                handler.removeCallbacks(adaptiveTextTick);
+                handler.postDelayed(adaptiveTextTick, 1200L);
             });
         });
     }
 
     private void stopBackgroundPlayback() {
+        handler.removeCallbacks(adaptiveTextTick);
         backgroundPlayerView.setVisibility(View.GONE);
         backgroundPlayerView.setPlayer(null);
         if (backgroundPlayer != null) {
             backgroundPlayer.release();
             backgroundPlayer = null;
         }
+        applyOverlayTextColor(Color.WHITE);
+        // Preserve the clean AerialViews look while pausing for another activity. When the
+        // user explicitly disables the video background, restore the focused-app glow.
+        if (heroShown && !getPreferencesStore().getBoolean(PREF_BACKGROUND, true)) {
+            ambient.animate().cancel();
+            ambient.animate().alpha(1f).setDuration(300).start();
+        }
+    }
+
+    private boolean isAerialBackgroundActive() {
+        return backgroundPlayer != null && backgroundPlayer.isPlaying()
+                && backgroundPlayerView != null && backgroundPlayerView.getVisibility() == View.VISIBLE;
+    }
+
+    /** Choose black or white foreground from the current AerialViews video frame. */
+    private void updateAdaptiveTextColor() {
+        SharedPreferences prefs = getPreferencesStore();
+        if (!TEXT_MODE_ADAPTIVE.equals(prefs.getString(PREF_TEXT_MODE, TEXT_MODE_ADAPTIVE))
+                || !isAerialBackgroundActive() || backgroundTextureView == null) {
+            applyOverlayTextColor(Color.WHITE);
+            return;
+        }
+        Bitmap frame = backgroundTextureView.getBitmap(48, 27);
+        if (frame == null) return;
+        long luminance = 0L;
+        int count = frame.getWidth() * frame.getHeight();
+        for (int y = 0; y < frame.getHeight(); y++) {
+            for (int x = 0; x < frame.getWidth(); x++) {
+                int pixel = frame.getPixel(x, y);
+                luminance += (int) (0.2126 * Color.red(pixel)
+                        + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel));
+            }
+        }
+        frame.recycle();
+        // A little hysteresis around the midpoint avoids flicker between adjacent frames.
+        int nextColor = luminance / Math.max(1, count) >= 150 ? 0xFF111111 : Color.WHITE;
+        applyOverlayTextColor(nextColor);
+    }
+
+    private void applyOverlayTextColor(int color) {
+        boolean changed = overlayTextColor != color;
+        overlayTextColor = color;
+        int shadowColor = color == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF;
+        float radius = Math.max(1f, 2f * density);
+        float dy = Math.max(1f, density);
+        int[] ids = {R.id.greeting, R.id.clock, R.id.ampm, R.id.date, R.id.heroName};
+        for (int id : ids) {
+            TextView text = findViewById(id);
+            if (text != null) {
+                text.setTextColor(color);
+                text.setShadowLayer(radius, 0f, dy, shadowColor);
+            }
+        }
+        if (changed && adapter != null) adapter.setOverlayTextColor(color);
     }
 
     @Override
@@ -410,7 +490,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroName.setTranslationX(0f);
             heroName.animate().alpha(1f).setDuration(260).start();
             setAmbient(color);
-            ambient.animate().alpha(1f).setDuration(600).start();
+            if (isAerialBackgroundActive()) {
+                ambient.animate().cancel();
+                ambient.setAlpha(0f);
+            } else {
+                ambient.animate().alpha(1f).setDuration(600).start();
+            }
             heroShown = true;
         } else if (changed) {
             heroName.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
@@ -419,7 +504,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 heroName.setTranslationX(12 * density);
                 heroName.animate().alpha(1f).translationX(0f).setDuration(200).start();
             }).start();
-            if (color != ambientColor) {
+            if (isAerialBackgroundActive()) {
+                ambient.animate().cancel();
+                ambient.setAlpha(0f);
+            } else if (color != ambientColor) {
                 ambient.animate().alpha(0.35f).setDuration(200).withEndAction(() -> {
                     setAmbient(color);
                     ambient.animate().alpha(1f).setDuration(500).start();
@@ -570,12 +658,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int delay = prefs.getInt(PREF_SCREENSAVER_DELAY,
                 (int) (DEFAULT_SCREENSAVER_IDLE_MS / MINUTE_MS));
         int columns = prefs.getInt(PREF_COLUMNS, getResources().getInteger(R.integer.columns));
+        boolean solidWhiteText = TEXT_MODE_SOLID_WHITE.equals(
+                prefs.getString(PREF_TEXT_MODE, TEXT_MODE_ADAPTIVE));
 
         addLauncherSettingRow(panel, "AerialViews video background", background ? "On" : "Off",
                 () -> {
                     boolean enabled = !background;
                     prefs.edit().putBoolean(PREF_BACKGROUND, enabled).apply();
                     if (enabled) startBackgroundPlayback(); else stopBackgroundPlayback();
+                    refreshLauncherSettings();
+                });
+        addLauncherSettingRow(panel, "Home text color", solidWhiteText ? "Solid White" : "Adaptive",
+                () -> {
+                    String next = solidWhiteText ? TEXT_MODE_ADAPTIVE : TEXT_MODE_SOLID_WHITE;
+                    prefs.edit().putString(PREF_TEXT_MODE, next).apply();
+                    updateAdaptiveTextColor();
                     refreshLauncherSettings();
                 });
         addLauncherSettingRow(panel, "AerialViews screensaver", screensaver ? "On" : "Off",
@@ -621,10 +718,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             adapter = new AppAdapter(this, this, COLUMNS);
             grid.setAdapter(adapter);
             adapter.reload();
+            adapter.setOverlayTextColor(overlayTextColor);
             refreshLauncherSettings();
         });
         addLauncherSettingRow(panel, "Dock apps", "Choose  ›",
                 () -> choosePackageList("Choose dock apps", PREF_DOCK_APPS, R.array.dock_apps));
+        addLauncherSettingRow(panel, "Dock app order", "Reorder  ›",
+                () -> chooseDockOrder());
         addLauncherSettingRow(panel, "Hidden apps", "Choose  ›",
                 () -> choosePackageList("Choose hidden apps", PREF_HIDDEN_APPS, R.array.hidden_apps));
         addLauncherSettingRow(panel, "Live TV app", liveTvPkg.isEmpty() ? "Disabled" : "Choose  ›",
@@ -668,6 +768,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         row.addView(status, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         Fonts.apply(row);
+        row.setOnFocusChangeListener((v, focused) -> {
+            title.setTextColor(getColorCompat(focused ? 0xFF111111 : 0xFFFFFFFF));
+            status.setTextColor(getColorCompat(focused ? 0xCC111111 : 0xB3FFFFFF));
+        });
         row.setOnClickListener(v -> action.run());
         panel.addView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -735,6 +839,142 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             joined.append(packageName);
         }
         return joined.toString();
+    }
+
+    private List<String> dockOrderLabels(List<String> packages, List<AppChoice> apps) {
+        List<String> labels = new ArrayList<>();
+        for (String packageName : packages) {
+            String label = packageName;
+            for (AppChoice app : apps) {
+                if (app.packageName.equals(packageName)) {
+                    label = app.label;
+                    break;
+                }
+            }
+            labels.add(label);
+        }
+        return labels;
+    }
+
+    private TextView dockOrderAction(String label) {
+        TextView button = new TextView(this);
+        button.setText(label);
+        button.setTextColor(Color.WHITE);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding((int) (14 * density), (int) (8 * density),
+                (int) (14 * density), (int) (8 * density));
+        button.setFocusable(true);
+        button.setClickable(true);
+        button.setBackgroundResource(R.drawable.input_row_bg);
+        button.setOnFocusChangeListener((v, focused) ->
+                button.setTextColor(focused ? 0xFF111111 : Color.WHITE));
+        return button;
+    }
+
+    /** Remote-friendly reorder dialog; the stored package list is the dock's persistent order. */
+    private void chooseDockOrder() {
+        if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
+        SharedPreferences prefs = getPreferencesStore();
+        List<String> order = parsePackages(prefs.getString(PREF_DOCK_APPS,
+                joinPackages(getResources().getStringArray(R.array.dock_apps))));
+        if (order.isEmpty()) {
+            Toast.makeText(this, "Choose dock apps first", Toast.LENGTH_SHORT).show();
+            showLauncherSettings();
+            return;
+        }
+        List<AppChoice> apps = installedAppChoices();
+        List<String> labels = dockOrderLabels(order, apps);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding((int) (8 * density), (int) (4 * density),
+                (int) (8 * density), (int) (4 * density));
+        TextView hint = new TextView(this);
+        hint.setText("Select an app, then move it up or down.");
+        hint.setTextColor(0xFFB3B3B3);
+        hint.setPadding((int) (8 * density), (int) (4 * density),
+                (int) (8 * density), (int) (8 * density));
+        content.addView(hint);
+
+        ListView list = new ListView(this);
+        list.setId(View.generateViewId());
+        list.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
+        ArrayAdapter<String> orderAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_activated_1, new ArrayList<>(labels));
+        list.setAdapter(orderAdapter);
+        content.addView(list, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (250 * density)));
+        final int[] selectedIndex = {0};
+        list.setItemChecked(0, true);
+        list.setSelection(0);
+        list.setOnItemClickListener((parent, view, position, id) -> {
+            selectedIndex[0] = position;
+            list.setItemChecked(position, true);
+        });
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER);
+        TextView moveUp = dockOrderAction("Move up ↑");
+        moveUp.setId(View.generateViewId());
+        TextView moveDown = dockOrderAction("Move down ↓");
+        moveDown.setId(View.generateViewId());
+        LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        actionParams.setMargins((int) (4 * density), (int) (6 * density),
+                (int) (4 * density), (int) (2 * density));
+        actions.addView(moveUp, actionParams);
+        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        downParams.setMargins((int) (4 * density), (int) (6 * density),
+                (int) (4 * density), (int) (2 * density));
+        actions.addView(moveDown, downParams);
+        content.addView(actions);
+        list.setNextFocusDownId(moveUp.getId());
+        moveUp.setNextFocusRightId(moveDown.getId());
+        moveUp.setNextFocusUpId(list.getId());
+        moveDown.setNextFocusUpId(moveUp.getId());
+
+        Runnable refreshOrder = () -> {
+            orderAdapter.clear();
+            orderAdapter.addAll(dockOrderLabels(order, apps));
+            orderAdapter.notifyDataSetChanged();
+            if (!order.isEmpty()) {
+                selectedIndex[0] = Math.max(0, Math.min(selectedIndex[0], order.size() - 1));
+                list.setItemChecked(selectedIndex[0], true);
+                list.setSelection(selectedIndex[0]);
+            }
+        };
+        moveUp.setOnClickListener(v -> {
+            int index = selectedIndex[0];
+            if (index <= 0) return;
+            Collections.swap(order, index, index - 1);
+            selectedIndex[0] = index - 1;
+            refreshOrder.run();
+        });
+        moveDown.setOnClickListener(v -> {
+            int index = selectedIndex[0];
+            if (index >= order.size() - 1) return;
+            Collections.swap(order, index, index + 1);
+            selectedIndex[0] = index + 1;
+            refreshOrder.run();
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Dock app order")
+                .setView(content)
+                .setNegativeButton(android.R.string.cancel, (d, which) -> showLauncherSettings())
+                .setPositiveButton("Save", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    prefs.edit().putString(PREF_DOCK_APPS,
+                            joinPackages(order.toArray(new String[0]))).apply();
+                    adapter.reload();
+                    dialog.dismiss();
+                    showLauncherSettings();
+                }));
+        dialog.show();
+        list.requestFocus();
     }
 
     /** Multi-select app picker for the dock and hidden-app list; no package-name typing required. */
