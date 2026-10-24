@@ -81,7 +81,20 @@ public class InputActivity extends Activity {
             }
         });
         boolean passthrough = getIntent().getBooleanExtra(EXTRA_PASSTHROUGH, true);
-        tv.tune(id, passthrough ? TvContract.buildChannelUriForPassthroughInput(id) : TvContract.buildChannelsUriForInput(id));
+        // TvView.tune() requires a URI for one channel. buildChannelsUriForInput() is a
+        // collection URI, not a tuneable channel URI; passing it can make Fire OS's TV
+        // input service throw IllegalArgumentException on the main thread ("channel").
+        // This screen currently supports passthrough inputs (HDMI/AV). For tuner inputs,
+        // leave the player in its no-signal state rather than crashing the launcher process.
+        if (passthrough) {
+            try {
+                tv.tune(id, TvContract.buildChannelUriForPassthroughInput(id));
+            } catch (IllegalArgumentException | SecurityException e) {
+                label.setText(title + "\\n" + getString(R.string.input_failed));
+            }
+        } else {
+            label.setText(title + "\\n" + getString(R.string.input_failed));
+        }
     }
 
     @Override
