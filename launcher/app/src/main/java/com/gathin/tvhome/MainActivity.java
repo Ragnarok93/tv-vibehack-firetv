@@ -955,19 +955,39 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return button;
     }
 
-    /** Remote-friendly reorder dialog; the stored package list is the dock's persistent order. */
+    /** Dock reorder only lists installed, non-system packages and uses their application labels. */
+    private List<AppChoice> userInstalledDockOrderChoices(List<String> configuredOrder) {
+        PackageManager pm = getPackageManager();
+        List<AppChoice> choices = new ArrayList<>();
+        for (String packageName : configuredOrder) {
+            try {
+                android.content.pm.ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
+                if ((info.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+                CharSequence appLabel = pm.getApplicationLabel(info);
+                String label = appLabel == null ? packageName : appLabel.toString();
+                choices.add(new AppChoice(packageName, label));
+            } catch (PackageManager.NameNotFoundException ignored) {
+                // Keep stale or system entries in the saved list, but never offer them for reordering.
+            }
+        }
+        return choices;
+    }
+
+    /** Remote-friendly reorder dialog; system entries remain saved but are intentionally not shown. */
     private void chooseDockOrder() {
         if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
         SharedPreferences prefs = getPreferencesStore();
         List<String> order = parsePackages(prefs.getString(PREF_DOCK_APPS,
                 joinPackages(getResources().getStringArray(R.array.dock_apps))));
-        if (order.isEmpty()) {
-            Toast.makeText(this, "Choose dock apps first", Toast.LENGTH_SHORT).show();
+        List<AppChoice> apps = userInstalledDockOrderChoices(order);
+        List<String> visibleOrder = new ArrayList<>();
+        for (AppChoice app : apps) visibleOrder.add(app.packageName);
+        if (visibleOrder.isEmpty()) {
+            Toast.makeText(this, "No user-installed dock apps to reorder", Toast.LENGTH_SHORT).show();
             showLauncherSettings();
             return;
         }
-        List<AppChoice> apps = installedAppChoices();
-        List<String> labels = dockOrderLabels(order, apps);
+        List<String> labels = dockOrderLabels(visibleOrder, apps);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding((int) (8 * density), (int) (4 * density),
@@ -1020,25 +1040,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         Runnable refreshOrder = () -> {
             orderAdapter.clear();
-            orderAdapter.addAll(dockOrderLabels(order, apps));
+            orderAdapter.addAll(dockOrderLabels(visibleOrder, apps));
             orderAdapter.notifyDataSetChanged();
-            if (!order.isEmpty()) {
-                selectedIndex[0] = Math.max(0, Math.min(selectedIndex[0], order.size() - 1));
-                list.setItemChecked(selectedIndex[0], true);
-                list.setSelection(selectedIndex[0]);
-            }
+            selectedIndex[0] = Math.max(0, Math.min(selectedIndex[0], visibleOrder.size() - 1));
+            list.setItemChecked(selectedIndex[0], true);
+            list.setSelection(selectedIndex[0]);
         };
+        Runnable moveSelected = () -> { };
         moveUp.setOnClickListener(v -> {
             int index = selectedIndex[0];
             if (index <= 0) return;
-            Collections.swap(order, index, index - 1);
+            String selectedPackage = visibleOrder.get(index);
+            String previousPackage = visibleOrder.get(index - 1);
+            Collections.swap(order, order.indexOf(selectedPackage), order.indexOf(previousPackage));
+            Collections.swap(visibleOrder, index, index - 1);
             selectedIndex[0] = index - 1;
             refreshOrder.run();
         });
         moveDown.setOnClickListener(v -> {
             int index = selectedIndex[0];
-            if (index >= order.size() - 1) return;
-            Collections.swap(order, index, index + 1);
+            if (index >= visibleOrder.size() - 1) return;
+            String selectedPackage = visibleOrder.get(index);
+            String nextPackage = visibleOrder.get(index + 1);
+            Collections.swap(order, order.indexOf(selectedPackage), order.indexOf(nextPackage));
+            Collections.swap(visibleOrder, index, index + 1);
             selectedIndex[0] = index + 1;
             refreshOrder.run();
         });
