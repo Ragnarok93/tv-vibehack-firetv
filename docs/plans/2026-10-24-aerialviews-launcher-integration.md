@@ -4,7 +4,7 @@
 
 **Goal:** Make AerialViews the idle screensaver invoked by the tv-vibehack-firetv launcher and replace AerialViews' Projectivy-specific host entry point with an explicit launcher-facing integration.
 
-**Architecture:** Keep AerialViews' playback, media providers, preferences, and screensaver rendering in the existing AerialViews application. Expose a stable explicit intent action for the launcher to start the existing screensaver activity, and have the launcher launch it only after a period of user inactivity and only when AerialViews is installed. Remove the Projectivy wallpaper-provider service/module registration from the AerialViews build after confirming no remaining compile-time consumers; do not reimplement media playback or duplicate media-provider logic inside the launcher.
+**Architecture:** Keep AerialViews' media providers and screensaver rendering in the existing AerialViews application. Expose a read-only, caller-checked ContentProvider catalogue of media URIs to tv-vibehack-firetv; the launcher uses Media3 to render supported videos behind its existing UI. The launcher also starts AerialViews' existing full-screen screensaver after inactivity. Remove the Projectivy wallpaper-provider service/module dependency while preserving AerialViews' standalone app and media-selection logic.
 
 **Tech Stack:** Android Java (tv-vibehack-firetv launcher), Kotlin/Android (AerialViews), Android manifests, Gradle, GitHub Actions.
 
@@ -20,36 +20,36 @@
 
 ---
 
-### Task 1: Define the AerialViews launcher entry point
+### Task 1: Expose a secure AerialViews media catalogue
 
 **Files:**
+- Create: `app/src/main/java/com/neilturner/aerialviews/services/launcher/LauncherWallpaperProvider.kt`
 - Modify: `app/src/main/AndroidManifest.xml`
-- Modify: `app/src/main/java/com/neilturner/aerialviews/ui/screensaver/TestActivity.kt` only if intent action handling is needed
 - Test: existing AerialViews unit-test configuration under `app/src/test`
 
 **Interfaces:**
-- Consumes: launcher explicit intent action `com.gathin.tvhome.action.START_SCREENSAVER`
-- Produces: an exported, resolvable AerialViews screensaver entry point that opens the existing `TestActivity` path
+- Consumes: existing AerialViews `MediaProvider` implementations and their configured media sources
+- Produces: `content://com.neilturner.aerialviews.launcher.wallpapers/wallpapers`, with `_id`, `uri`, `type`, and `title` columns; queries are restricted to the `com.gathin.tvhome` caller
 
-- [ ] **Step 1: Add the explicit launcher action** to the existing screensaver activity intent filter without removing its current exported component behavior.
-- [ ] **Step 2: Verify the intent contract** by checking the manifest declares the exact action, default category, and existing activity class.
-- [ ] **Step 3: Keep launch behavior compatible** with ordinary direct starts and ensure the action does not change settings-import or app-launch flows.
+- [ ] **Step 1: Add a read-only `ContentProvider`** that reuses AerialViews' existing configured providers and returns the four-column media catalogue.
+- [ ] **Step 2: Restrict callers** to the tv-vibehack-firetv package and return an empty cursor only when no enabled providers have media; provider failures must not crash AerialViews.
+- [ ] **Step 3: Register the provider** with authority `com.neilturner.aerialviews.launcher.wallpapers` and keep the screensaver activity's explicit launcher action available.
 - [ ] **Step 4: Run AerialViews verification** with `./gradlew :app:testBetaDebugUnitTest :app:spotlessCheck :app:assembleBetaDebug`; expected outcome is a clean unit-test, formatting, and debug-build result.
 
-### Task 2: Launch AerialViews after launcher inactivity
+### Task 2: Render AerialViews video backgrounds in the launcher
 
 **Files:**
+- Modify: `launcher/app/build.gradle`
 - Modify: `launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java`
-- Modify: `launcher/app/src/main/AndroidManifest.xml` only if package visibility or intent declarations prove necessary
-- Test: launcher build via `cd launcher && ./gradlew assembleDebug`
+- Test: launcher build via `cd launcher && ./gradlew --no-daemon assembleDebug`
 
 **Interfaces:**
-- Consumes: `com.gathin.tvhome.action.START_SCREENSAVER` in package `com.neilturner.aerialviews`
-- Produces: idle timer that launches AerialViews screensaver after 10 minutes without user interaction
+- Consumes: `content://com.neilturner.aerialviews.launcher.wallpapers/wallpapers` with `uri` and `type` columns
+- Produces: a Media3 video layer behind the launcher UI, hidden while no videos are available or the launcher is paused
 
-- [ ] **Step 1: Add a main-thread idle timer** using the existing `Handler`; reset it from `onUserInteraction()`, start it when the launcher resumes, and remove callbacks when it pauses/stops.
-- [ ] **Step 2: Launch defensively** with an explicit package/action intent; verify the package is installed before launch and catch `ActivityNotFoundException`/security failures so the launcher stays usable.
-- [ ] **Step 3: Preserve navigation** by resetting the timer after DPAD, remote, touch, or launcher interactions and by not launching the screensaver while the launcher is backgrounded.
+- [ ] **Step 1: Add Media3 dependencies** and a non-focusable `PlayerView` as the first child of the launcher root, behind the existing ambient glow, shelf, and tiles.
+- [ ] **Step 2: Query the provider off the main thread**, play video rows in shuffled repeat mode, and release the player when the launcher pauses; missing AerialViews, denied access, empty media, and query failures must leave the launcher functional.
+- [ ] **Step 3: Add a main-thread idle timer** using the existing `Handler`; reset it from `onUserInteraction()`, start it when the launcher resumes, and remove callbacks when it pauses.
 - [ ] **Step 4: Verify the launcher build** with `cd launcher && ./gradlew --no-daemon assembleDebug`; expected outcome is successful APK assembly without changes to existing Home/focus behavior.
 
 ### Task 3: Remove Projectivy as the host integration
@@ -87,4 +87,4 @@
 ## Unresolved externally observable decisions
 
 - The initial idle timeout is set to 10 minutes as a conservative implementation default; making it user-configurable is intentionally outside this first integration unless existing launcher settings provide a natural supported preference seam.
-- Cross-app live-video rendering behind the launcher tiles is not included in this implementation. AerialViews is started as a full-screen idle screensaver, preserving its existing playback pipeline instead of trying to embed a second app's rendering surface into the launcher's view hierarchy.
+- The first implementation renders videos returned by AerialViews' existing providers; it does not attempt to embed AerialViews' own Activity surface. The separate full-screen idle screensaver uses the existing `TestActivity` entry point.
