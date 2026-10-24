@@ -69,6 +69,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final Context ctx;
     private final TileListener listener;
     private final int dockSize;
+    private int overlayTextColor = Color.WHITE;
     /** Dock order (res/values/config.xml, dock_apps). */
     private List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
@@ -146,6 +147,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         notifyDataSetChanged();
     }
 
+    void setOverlayTextColor(int color) {
+        if (overlayTextColor == color) return;
+        overlayTextColor = color;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -158,6 +165,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         Entry e = items.get(position);
         h.resizeTile(h.itemView);
         h.name.setText(e.label);
+        h.name.setTextColor(overlayTextColor);
+        float textDensity = h.name.getResources().getDisplayMetrics().density;
+        h.name.setShadowLayer(Math.max(1f, 2f * textDensity), 0f, Math.max(1f, textDensity),
+                overlayTextColor == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF);
         h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
         h.name.setAlpha(0f);
         h.card.setScaleX(1f);
