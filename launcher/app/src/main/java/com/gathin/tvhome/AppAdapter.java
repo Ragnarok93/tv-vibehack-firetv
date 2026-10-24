@@ -70,19 +70,23 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final TileListener listener;
     private final int dockSize;
     /** Dock order (res/values/config.xml, dock_apps). */
-    private final List<String> favourites;
+    private List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
-    private final Set<String> hidden;
+    private Set<String> hidden;
     private final List<Entry> items = new ArrayList<>();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize) {
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
+        loadConfig();
+    }
+
+    private void loadConfig() {
         SharedPreferences prefs = ctx.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE);
-        this.favourites = parsePackages(prefs.getString("dock_apps",
+        favourites = parsePackages(prefs.getString("dock_apps",
                 joinPackages(ctx.getResources().getStringArray(R.array.dock_apps))));
-        this.hidden = new HashSet<>(parsePackages(prefs.getString("hidden_apps",
+        hidden = new HashSet<>(parsePackages(prefs.getString("hidden_apps",
                 joinPackages(ctx.getResources().getStringArray(R.array.hidden_apps)))));
     }
 
@@ -106,6 +110,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     void reload() {
+        loadConfig();
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         List<ResolveInfo> found = new ArrayList<>(pm.queryIntentActivities(probe, 0));
