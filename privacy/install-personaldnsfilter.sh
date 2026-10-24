@@ -112,7 +112,7 @@ printf '%s\n%s000\n' "$(grep -c . "$WORK/FILTERHOSTS.TXT")" "$(date +%s)" > "$WO
 # Relaunch after the config/list have been replaced; keep it running in the background.
 "$PY" -I tools/tv.py 'am start -n dnsfilter.android/.DNSProxyActivity' >/dev/null
 sleep 3
-"$PY" -I tools/tv.py 'input keyevent KEYCODE_HOME' >/dev/null || true
+# Leave the filter activity visible so any VPN consent prompt can be accepted with the remote.
 echo
 echo "Configured $(( $(grep -c . "$WORK/FILTERHOSTS.TXT") )) Amazon-related domain rules."
 echo "Next: run privacy/verify-personaldnsfilter.sh after the VPN is active."
