@@ -280,27 +280,43 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             // Keep a real gutter inside every span. At six columns, using almost the
             // entire cell lets focused tiles and the dock highlight collide with the
             // RecyclerView's clipped edges on narrower Fire TV output modes.
-            int available = item.getWidth() - Math.round(24f * density);
+            // RecyclerView gives each tile a full grid span. Use that real span rather than
+            // a fixed 180dp tile: at 5+ columns a fixed-width card and focus scale overlap
+            // neighboring cells on Fire TV's narrower logical display sizes.
+            int available = item.getWidth() - Math.round(16f * density);
             if (available <= 0) return;
             int tileWidth = Math.min(Math.round(180f * density), available);
+            int tileHeight = Math.max(Math.round(44f * density), Math.round(tileWidth * 9f / 16f));
 
             ViewGroup.LayoutParams cardParams = card.getLayoutParams();
-            if (cardParams.width != tileWidth) {
+            if (cardParams.width != tileWidth || cardParams.height != tileHeight) {
                 cardParams.width = tileWidth;
+                cardParams.height = tileHeight;
                 card.setLayoutParams(cardParams);
             }
             ViewGroup.LayoutParams nameParams = name.getLayoutParams();
-            if (nameParams.width != tileWidth) {
+            int nameTop = tileHeight + Math.round(7f * density);
+            if (nameParams.width != tileWidth || nameParams.height != Math.round(22f * density)
+                    || ((ViewGroup.MarginLayoutParams) nameParams).topMargin != nameTop) {
                 nameParams.width = tileWidth;
+                nameParams.height = Math.round(22f * density);
+                if (nameParams instanceof ViewGroup.MarginLayoutParams) {
+                    ((ViewGroup.MarginLayoutParams) nameParams).topMargin = nameTop;
+                }
                 name.setLayoutParams(nameParams);
             }
-            int iconSize = Math.min(Math.round(48f * density), Math.round(tileWidth * 0.28f));
+            // Scale the actual drawable viewport with the tile, not just the card. This keeps
+            // fallback app-icon artwork legible at high column counts and preserves its aspect ratio.
+            int iconSize = Math.max(Math.round(20f * density), Math.min(Math.round(64f * density),
+                    Math.round(tileWidth * 0.42f)));
             ViewGroup.LayoutParams iconParams = icon.getLayoutParams();
             if (iconParams.width != iconSize || iconParams.height != iconSize) {
                 iconParams.width = iconSize;
                 iconParams.height = iconSize;
                 icon.setLayoutParams(iconParams);
             }
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            banner.setScaleType(ImageView.ScaleType.CENTER_CROP);
         }
 
         Holder(View v, TileListener listener) {
