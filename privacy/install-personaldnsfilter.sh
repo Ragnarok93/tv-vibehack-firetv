@@ -82,11 +82,21 @@ curl -fsSL --retry 3 --connect-timeout 20 "$LIST_URL" -o "$WORK/amazon-source.tx
 # HaGeZi's native-domain list is the primary source. Add any reviewed local entries.
 {
   grep -v '^#' "$WORK/amazon-source.txt" | tr -d '\r' | sed '/^[[:space:]]*$/d'
-  grep -vE '^[[:space:]]*(#|$)' privacy/amazon-extra-hosts.txt | tr -d '\r'
+  { grep -vE '^[[:space:]]*(#|$)' privacy/amazon-extra-hosts.txt || true; } | tr -d '\r'
 } | sort -u > "$WORK/FILTERHOSTS.TXT"
 [[ -s "$WORK/FILTERHOSTS.TXT" ]] || { echo "Blocklist is empty; refusing to continue." >&2; exit 1; }
+# Fire OS 6 may omit the default route from the shell's `ip route` output.
+# Prefer that route when present, then fall back to Android's DHCP results in dumpsys wifi.
 GW=$("$PY" -I tools/tv.py 'ip route' | awk '/^default / {print $3; exit}' | tr -d '\r')
-[[ -n "$GW" ]] || { echo "Could not determine the TV's default gateway." >&2; exit 1; }
+if [[ -z "$GW" ]]; then
+  GW=$("$PY" -I tools/tv.py 'dumpsys wifi' |
+    sed -nE 's/.*mDhcpResults .*Gateway ([0-9.]+).*/\1/p' | head -n 1 | tr -d '\r')
+fi
+[[ "$GW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || {
+  echo "Could not determine a valid IPv4 gateway from ip route or Android DHCP results." >&2
+  exit 1
+}
+echo "Detected TV gateway: $GW"
 
 # Patch only known settings; fail closed if the upstream template changes.
 python3 - "$WORK/dnsfilter.conf" "$GW" <<'PY'
