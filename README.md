@@ -83,6 +83,8 @@ This builds the APK, installs it, grants its two special permissions over ADB (`
 
 To remove it: `debloat/restore-launcher.sh`.
 
+**Upgrade safety:** Keep the signing keystore used for the installed launcher backed up and reuse it for every update. See [APK upgradeability](docs/upgradeability.md) for the package ID, signing and version-code rules; GitHub Actions builds are compile checks, not distributable APKs.
+
 ## What we learned about Fire OS
 
 ### You can't replace Home, so the launcher follows it
