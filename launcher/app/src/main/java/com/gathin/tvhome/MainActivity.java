@@ -136,7 +136,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
-        COLUMNS = Math.max(1, getResources().getInteger(R.integer.columns));
+        COLUMNS = Math.max(1, getPreferencesStore().getInt(PREF_COLUMNS, getResources().getInteger(R.integer.columns)));
         liveTvPkg = getPreferencesStore().getString(PREF_LIVE_TV_PACKAGE, getString(R.string.live_tv_package)).trim();
 
         HomeKeyService.start(this);
@@ -573,9 +573,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int columns = prefs.getInt(PREF_COLUMNS, getResources().getInteger(R.integer.columns));
 
         addLauncherSettingRow(panel, "AerialViews video background", background ? "On" : "Off",
-                () -> { prefs.edit().putBoolean(PREF_BACKGROUND, !background).apply(); refreshLauncherSettings(); });
+                () -> {
+                    boolean enabled = !background;
+                    prefs.edit().putBoolean(PREF_BACKGROUND, enabled).apply();
+                    if (enabled) startBackgroundPlayback(); else stopBackgroundPlayback();
+                    refreshLauncherSettings();
+                });
         addLauncherSettingRow(panel, "AerialViews screensaver", screensaver ? "On" : "Off",
-                () -> { prefs.edit().putBoolean(PREF_SCREENSAVER, !screensaver).apply(); refreshLauncherSettings(); });
+                () -> {
+                    boolean enabled = !screensaver;
+                    prefs.edit().putBoolean(PREF_SCREENSAVER, enabled).apply();
+                    handler.removeCallbacks(launchAerialViewsScreensaver);
+                    if (enabled && launcherResumed) handler.postDelayed(launchAerialViewsScreensaver, screensaverDelayMs());
+                    refreshLauncherSettings();
+                });
         addLauncherSettingRow(panel, "Screensaver idle delay", delay + " min  ›",
                 () -> {
                     int[] values = new int[]{5, 10, 15, 30, 60};
@@ -675,7 +686,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void editPackageList(String title, String key, int defaultArray) {
         if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
         String current = getPreferencesStore().getString(key,
-                String.join(",", getResources().getStringArray(defaultArray)));
+                joinPackages(getResources().getStringArray(defaultArray)));
         EditText input = new EditText(this);
         input.setSingleLine(false);
         input.setMinLines(2);
@@ -696,6 +707,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     adapter.reload();
                     showLauncherSettings();
                 }).show();
+    }
+
+    private String joinPackages(String[] packages) {
+        StringBuilder joined = new StringBuilder();
+        for (String pkg : packages) {
+            if (joined.length() > 0) joined.append(',');
+            joined.append(pkg);
+        }
+        return joined.toString();
     }
 
     private void editLiveTvPackage() {
