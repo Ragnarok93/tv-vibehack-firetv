@@ -207,7 +207,7 @@ The optional list covers ad-token services, watch-engagement tracking, additiona
 
 ### personalDNSfilter
 
-personalDNSfilter is a separate third-party app and local VPN; it is **not embedded in the launcher APK**. The installer downloads a pinned F-Droid APK and checks its SHA-256, fetches HaGeZi's Amazon-only domain list, writes the list/config through the existing ADB client, and sets the VPN app-op and boot whitelist where supported.
+personalDNSfilter is a separate third-party app and local VPN; it is **not embedded in the launcher APK**. The installer resolves the latest APK asset from the official upstream GitHub release, verifies a published SHA-256 asset digest when GitHub provides one, fetches HaGeZi's Amazon-only domain list, writes the list/config through the existing ADB client, and sets the VPN app-op and boot whitelist where supported.
 
 ```bash
 TV_HOST=192.168.0.108 bash privacy/install-personaldnsfilter.sh
@@ -223,3 +223,19 @@ TV_HOST=192.168.0.108 bash privacy/disable-personaldnsfilter.sh
 **Important:** the Amazon-only blocklist also blocks some Amazon update endpoints. Keep that in mind before manually updating Fire OS. DNS filtering cannot reliably remove YouTube ads because YouTube ads and video delivery share infrastructure. Tubi and Pluto TV may be partially affected only when ad requests use separate domains; playback can break if a required host is blocked. The smoke test checks one Amazon update host and that YouTube resolves, but it does not guarantee every app works or that all ads are blocked.
 
 The blocklist is generated from HaGeZi's native.amazon-onlydomains.txt; reviewed additional hostnames can be added one per line to privacy/amazon-extra-hosts.txt. Do not add wildcard syntax or copy large third-party lists without testing them.
+
+#### One-command setup
+
+Run this to preview the additional package candidates without changing the TV:
+
+```bash
+TV_HOST=192.168.0.108 bash privacy/setup-firetv-privacy.sh --dry-run
+```
+
+Then run the combined setup. It asks separately before disabling the optional package candidates and before installing/configuring personalDNSfilter:
+
+```bash
+TV_HOST=192.168.0.108 bash privacy/setup-firetv-privacy.sh
+```
+
+Use `--dns-only` to install/configure personalDNSfilter without changing packages, or `--packages-only` to apply the optional package list without installing the DNS filter. The installer downloads the latest APK from the official upstream GitHub Releases API rather than using a hardcoded version. Runtime verification on the Toshiba AFTBAMR311 is still required before relying on the setup.
