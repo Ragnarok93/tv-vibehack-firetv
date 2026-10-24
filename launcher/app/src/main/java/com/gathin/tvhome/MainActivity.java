@@ -728,6 +728,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return packages;
     }
 
+    private String joinPackages(String[] packages) {
+        StringBuilder joined = new StringBuilder();
+        for (String packageName : packages) {
+            if (joined.length() > 0) joined.append(',');
+            joined.append(packageName);
+        }
+        return joined.toString();
+    }
+
     /** Multi-select app picker for the dock and hidden-app list; no package-name typing required. */
     private void choosePackageList(String title, String key, int defaultArray) {
         if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
