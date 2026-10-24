@@ -377,7 +377,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 && backgroundPlayerView != null && backgroundPlayerView.getVisibility() == View.VISIBLE;
     }
 
-    /** Choose black or white foreground from the current AerialViews video frame. */
+    /**
+     * Sample the video beneath each visible text element instead of averaging the entire frame.
+     * Whole-frame averages are usually dominated by dark edges and can leave text white over a
+     * bright scene. TextureView supplies the actual decoded frame without the launcher text on it.
+     */
     private void updateAdaptiveTextColor() {
         SharedPreferences prefs = getPreferencesStore();
         if (!TEXT_MODE_ADAPTIVE.equals(prefs.getString(PREF_TEXT_MODE, TEXT_MODE_ADAPTIVE))
@@ -385,44 +389,105 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             applyOverlayTextColor(Color.WHITE);
             return;
         }
-        Bitmap frame = backgroundTextureView.getBitmap(48, 27);
-        if (frame == null) return;
-        long luminance = 0L;
-        int count = frame.getWidth() * frame.getHeight();
-        for (int y = 0; y < frame.getHeight(); y++) {
-            for (int x = 0; x < frame.getWidth(); x++) {
-                int pixel = frame.getPixel(x, y);
-                luminance += (int) (0.2126 * Color.red(pixel)
-                        + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel));
+        Bitmap frame = backgroundTextureView.getBitmap(96, 54);
+        if (frame == null || root == null || backgroundTextureView.getWidth() <= 0
+                || backgroundTextureView.getHeight() <= 0) {
+            applyOverlayTextColor(Color.WHITE);
+            if (frame != null) frame.recycle();
+            return;
+        }
+        int[] videoLocation = new int[2];
+        backgroundTextureView.getLocationOnScreen(videoLocation);
+        updateAdaptiveTextColors(root, frame, videoLocation[0], videoLocation[1],
+                backgroundTextureView.getWidth(), backgroundTextureView.getHeight());
+        frame.recycle();
+    }
+
+    private void updateAdaptiveTextColors(View view, Bitmap frame, int videoX, int videoY,
+            int videoWidth, int videoHeight) {
+        if (view.getVisibility() != View.VISIBLE || view.getAlpha() < 0.05f) return;
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            if (text.getText() != null && text.getText().length() > 0) {
+                int luminance = sampleTextBackground(frame, text, videoX, videoY, videoWidth, videoHeight);
+                if (luminance >= 0) {
+                    int current = text.getCurrentTextColor();
+                    boolean currentlyLight = Color.red(current) > 180
+                            && Color.green(current) > 180 && Color.blue(current) > 180;
+                    int next = currentlyLight
+                            ? (luminance >= 160 ? 0xFF111111 : Color.WHITE)
+                            : (luminance <= 135 ? Color.WHITE : 0xFF111111);
+                    int shadow = next == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF;
+                    text.setTextColor(next);
+                    text.setShadowLayer(Math.max(1f, 2f * density), 0f,
+                            Math.max(1f, density), shadow);
+                }
             }
         }
-        frame.recycle();
-        long averageLuminance = luminance / Math.max(1, count);
-        // Separate switch-on/off thresholds prevent rapid color flips around the midpoint.
-        int nextColor;
-        if (overlayTextColor == Color.WHITE) {
-            nextColor = averageLuminance >= 160 ? 0xFF111111 : Color.WHITE;
-        } else {
-            nextColor = averageLuminance <= 135 ? Color.WHITE : 0xFF111111;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                updateAdaptiveTextColors(group.getChildAt(i), frame, videoX, videoY,
+                        videoWidth, videoHeight);
+            }
         }
-        applyOverlayTextColor(nextColor);
+    }
+
+    /** Returns average background luminance under the text, or -1 when the region is unavailable. */
+    private int sampleTextBackground(Bitmap frame, TextView text, int videoX, int videoY,
+            int videoWidth, int videoHeight) {
+        int[] location = new int[2];
+        text.getLocationOnScreen(location);
+        float left = location[0] - videoX;
+        float top = location[1] - videoY;
+        float right = left + text.getWidth();
+        float bottom = top + text.getHeight();
+        android.text.Layout layout = text.getLayout();
+        if (layout != null && layout.getLineCount() > 0) {
+            left += text.getCompoundPaddingLeft() + layout.getLineLeft(0);
+            right = location[0] - videoX + text.getCompoundPaddingLeft() + layout.getLineRight(0);
+            top += text.getCompoundPaddingTop() + layout.getLineTop(0);
+            bottom = location[1] - videoY + text.getCompoundPaddingTop() + layout.getLineBottom(0);
+        }
+        float padX = Math.max(2f, (right - left) * 0.12f);
+        float padY = Math.max(2f, (bottom - top) * 0.20f);
+        int x0 = Math.max(0, (int) Math.floor((left - padX) * frame.getWidth() / videoWidth));
+        int x1 = Math.min(frame.getWidth(), (int) Math.ceil((right + padX) * frame.getWidth() / videoWidth));
+        int y0 = Math.max(0, (int) Math.floor((top - padY) * frame.getHeight() / videoHeight));
+        int y1 = Math.min(frame.getHeight(), (int) Math.ceil((bottom + padY) * frame.getHeight() / videoHeight));
+        if (x0 >= x1 || y0 >= y1) return -1;
+        long total = 0L;
+        int count = 0;
+        for (int y = y0; y < y1; y++) {
+            for (int x = x0; x < x1; x++) {
+                int pixel = frame.getPixel(x, y);
+                total += (int) (0.2126 * Color.red(pixel)
+                        + 0.7152 * Color.green(pixel) + 0.0722 * Color.blue(pixel));
+                count++;
+            }
+        }
+        return count == 0 ? -1 : (int) (total / count);
     }
 
     private void applyOverlayTextColor(int color) {
         boolean changed = overlayTextColor != color;
         overlayTextColor = color;
-        int shadowColor = color == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF;
-        float radius = Math.max(1f, 2f * density);
-        float dy = Math.max(1f, density);
-        int[] ids = {R.id.greeting, R.id.clock, R.id.ampm, R.id.date, R.id.heroName};
-        for (int id : ids) {
-            TextView text = findViewById(id);
-            if (text != null) {
-                text.setTextColor(color);
-                text.setShadowLayer(radius, 0f, dy, shadowColor);
-            }
-        }
+        applySolidTextColor(root, color);
         if (changed && adapter != null) adapter.setOverlayTextColor(color);
+    }
+
+    private void applySolidTextColor(View view, int color) {
+        if (view == null) return;
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            text.setTextColor(color);
+            text.setShadowLayer(Math.max(1f, 2f * density), 0f, Math.max(1f, density),
+                    color == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF);
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) applySolidTextColor(group.getChildAt(i), color);
+        }
     }
 
     @Override
