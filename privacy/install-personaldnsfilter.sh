@@ -32,15 +32,51 @@ case "$reply" in y|Y|yes|YES) ;; *) echo "Cancelled."; exit 0 ;; esac
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 PKG=dnsfilter.android
-VERSION=1506103
-APK_URL="https://f-droid.org/repo/dnsfilter.android_${VERSION}.apk"
-APK_SHA256=3ddd0db322d1ca5fe950ea29dc1788af6e6581bb5f34694085fb4aa2e77b68ad
+RELEASE_API=https://api.github.com/repos/IngoZenz/personaldnsfilter/releases/latest
 CONF_URL=https://raw.githubusercontent.com/IngoZenz/personaldnsfilter/master/app/src/main/assets/dnsfilter.conf
 LIST_URL=https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/native.amazon-onlydomains.txt
+
+# Resolve the latest APK from the official upstream GitHub release; never hardcode a version.
+curl -fsSL --retry 3 --connect-timeout 20 \
+  -H 'Accept: application/vnd.github+json' \
+  -H 'X-GitHub-Api-Version: 2022-11-28' \
+  "$RELEASE_API" -o "$WORK/release.json"
+python3 - "$WORK/release.json" "$WORK/apk-url.txt" "$WORK/apk-digest.txt" <<'PY'
+import json, sys
+release_path, url_path, digest_path = sys.argv[1:]
+with open(release_path, encoding="utf-8") as f:
+    release = json.load(f)
+assets = [a for a in release.get("assets", [])
+          if a.get("name", "").lower().endswith(".apk")]
+if not assets:
+    raise SystemExit("Latest official GitHub release contains no APK asset; refusing to install.")
+# Prefer a plain APK, not an Android App Bundle or other archive.
+assets.sort(key=lambda a: (("bundle" in a.get("name", "").lower()), a.get("name", "").lower()))
+asset = assets[0]
+url = asset.get("browser_download_url", "")
+if not url.startswith("https://github.com/IngoZenz/personaldnsfilter/releases/download/"):
+    raise SystemExit("APK asset URL is not from the official upstream release host.")
+with open(url_path, "w", encoding="utf-8") as f:
+    f.write(url)
+with open(digest_path, "w", encoding="utf-8") as f:
+    f.write(asset.get("digest") or "")
+print("Latest upstream release:", release.get("tag_name", "(untagged)"))
+print("APK asset:", asset.get("name"))
+if not asset.get("digest"):
+    print("Note: GitHub did not publish an asset digest; HTTPS and official release URL will be used.")
+PY
+APK_URL=$(cat "$WORK/apk-url.txt")
+APK_DIGEST=$(cat "$WORK/apk-digest.txt")
 curl -fsSL --retry 3 --connect-timeout 20 "$APK_URL" -o "$WORK/dnsfilter.apk"
-if command -v sha256sum >/dev/null; then GOT=$(sha256sum "$WORK/dnsfilter.apk" | awk '{print $1}')
-else GOT=$(shasum -a 256 "$WORK/dnsfilter.apk" | awk '{print $1}'); fi
-[[ "$GOT" == "$APK_SHA256" ]] || { echo "APK checksum mismatch; refusing to install." >&2; exit 1; }
+if [[ "$APK_DIGEST" == sha256:* ]]; then
+  EXPECTED="${APK_DIGEST#sha256:}"
+  if command -v sha256sum >/dev/null; then GOT=$(sha256sum "$WORK/dnsfilter.apk" | awk '{print $1}')
+  else GOT=$(shasum -a 256 "$WORK/dnsfilter.apk" | awk '{print $1}'); fi
+  [[ "$GOT" == "$EXPECTED" ]] || { echo "APK checksum mismatch; refusing to install." >&2; exit 1; }
+elif [[ -n "$APK_DIGEST" ]]; then
+  echo "Unsupported upstream asset digest format '$APK_DIGEST'; refusing to install." >&2
+  exit 1
+fi
 curl -fsSL --retry 3 --connect-timeout 20 "$CONF_URL" -o "$WORK/dnsfilter.conf"
 curl -fsSL --retry 3 --connect-timeout 20 "$LIST_URL" -o "$WORK/amazon-source.txt"
 # HaGeZi's native-domain list is the primary source. Add any reviewed local entries.
