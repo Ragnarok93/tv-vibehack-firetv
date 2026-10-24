@@ -390,10 +390,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return;
         }
         Bitmap frame = backgroundTextureView.getBitmap(96, 54);
-        if (frame == null || root == null || backgroundTextureView.getWidth() <= 0
+        // TextureView can briefly return null while ExoPlayer switches or reconfigures a
+        // surface. Keep the last sampled colours during those gaps instead of flashing white.
+        if (frame == null) return;
+        if (root == null || backgroundTextureView.getWidth() <= 0
                 || backgroundTextureView.getHeight() <= 0) {
-            applyOverlayTextColor(Color.WHITE);
-            if (frame != null) frame.recycle();
+            frame.recycle();
             return;
         }
         int[] videoLocation = new int[2];
