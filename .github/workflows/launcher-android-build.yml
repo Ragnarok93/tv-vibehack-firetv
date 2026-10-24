@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - "feature/**"
+      - "fix/**"
     paths:
       - "launcher/**"
       - ".github/workflows/launcher-android-build.yml"
