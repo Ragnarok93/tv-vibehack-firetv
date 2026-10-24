@@ -1,0 +1,22 @@
+# OPTIONAL extra Amazon privacy packages for Fire OS 6 / Android 7.1 (API 25).
+# Adapted from humblemuzzu/dumbtv data/fireos6/packages.txt.
+# The upstream list was checked on a Fire TV Stick 4K, not this Toshiba AFTBAMR311.
+# Only disable packages present on the connected TV; review the dry run first.
+# These are not included in debloat/apply.sh by default.
+#
+# Ads / ad-token services
+com.amazon.privacypassservice
+com.amazon.hedwig
+#
+# Additional telemetry / logging / analytics
+com.amazon.dp.logger
+com.amazon.logan
+com.amazon.ceviche
+com.amazon.connectivitydiag
+com.amazon.tigris
+com.amazon.spiderpork
+com.amazon.tv.developer.dataservice
+#
+# Experiments / remote configuration
+com.amazon.ale
+com.amazon.katoch

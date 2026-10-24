@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
@@ -56,8 +57,8 @@ public class HomeKeyService extends Service {
     private Process logcat;
     private volatile boolean running;
     private String lastFocused = "";
-    private long lastShown;
-    private View overlay;
+    private volatile long lastShown;
+    private volatile View overlay;
 
     /** Called by MainActivity when it leaves the screen; the bitmap is what the overlay shows. */
     static void setSnapshot(Bitmap b) {
@@ -139,10 +140,12 @@ public class HomeKeyService extends Service {
 
     private void show() {
         long now = SystemClock.uptimeMillis();
-        if (now - lastShown < 1_000) return;
+        // Suppress duplicate log lines only while a cover is already present. A blanket one-second
+        // throttle can drop a real Home press just after the previous cover is removed, exposing Amazon home.
+        if (overlay != null && now - lastShown < 1_000) return;
         lastShown = now;
         main.post(() -> {
-            addOverlay();
+            if (overlay == null) addOverlay();
             io.execute(() -> {
                 if (!askHelper("home").equals("ok")) main.post(() -> showHome(this));
             });
@@ -162,10 +165,18 @@ public class HomeKeyService extends Service {
     }
 
     private void addOverlay() {
-        if (overlay != null || snapshot == null || snapshot.isRecycled()) return;
-        ImageView v = new ImageView(this);
-        v.setImageBitmap(snapshot);
-        v.setScaleType(ImageView.ScaleType.FIT_XY);
+        if (overlay != null) return;
+        View v;
+        if (snapshot != null && !snapshot.isRecycled()) {
+            ImageView image = new ImageView(this);
+            image.setImageBitmap(snapshot);
+            image.setScaleType(ImageView.ScaleType.FIT_XY);
+            v = image;
+        } else {
+            // Still cover Amazon's launcher if a snapshot was unavailable during a fast Home press.
+            v = new View(this);
+            v.setBackgroundColor(Color.BLACK);
+        }
         v.setFocusable(true);
         v.setFocusableInTouchMode(true);
         // Swallow the remote while Amazon's home is underneath, so presses can't open things there.

@@ -22,12 +22,19 @@ public class LiveTvActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Intent target = launchIntent(this, getString(R.string.live_tv_package));
-        if (target == null) target = new Intent(this, MainActivity.class);
-        target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-        try {
-            startActivity(target);
-        } catch (ActivityNotFoundException | SecurityException ignored) {
+        // Use the same saved selection as the Inputs menu. Falling back to MainActivity here
+        // made the physical TV button appear to refresh the home screen when the default app
+        // was absent or the user had selected a different app.
+        String packageName = getSharedPreferences("launcher_settings", MODE_PRIVATE)
+                .getString("live_tv_package", getString(R.string.live_tv_package)).trim();
+        Intent target = launchIntent(this, packageName);
+        if (target != null) {
+            target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            try {
+                startActivity(target);
+            } catch (ActivityNotFoundException | SecurityException ignored) {
+                // No-op rather than bouncing back to the launcher for a stale app selection.
+            }
         }
         finish();
     }

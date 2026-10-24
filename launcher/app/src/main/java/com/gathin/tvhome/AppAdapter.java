@@ -69,6 +69,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final Context ctx;
     private final TileListener listener;
     private final int dockSize;
+    private int overlayTextColor = Color.WHITE;
     /** Dock order (res/values/config.xml, dock_apps). */
     private List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
@@ -146,6 +147,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         notifyDataSetChanged();
     }
 
+    void setOverlayTextColor(int color) {
+        if (overlayTextColor == color) return;
+        overlayTextColor = color;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -156,7 +163,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public void onBindViewHolder(@NonNull Holder h, int position) {
         Entry e = items.get(position);
+        h.resizeTile(h.itemView);
         h.name.setText(e.label);
+        h.name.setTextColor(overlayTextColor);
+        float textDensity = h.name.getResources().getDisplayMetrics().density;
+        h.name.setShadowLayer(Math.max(1f, 2f * textDensity), 0f, Math.max(1f, textDensity),
+                overlayTextColor == Color.WHITE ? 0xCC000000 : 0xCCFFFFFF);
         h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
         h.name.setAlpha(0f);
         h.card.setScaleX(1f);
@@ -263,6 +275,50 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         final TextView label;
         final TextView name;
 
+        void resizeTile(View item) {
+            float density = item.getResources().getDisplayMetrics().density;
+            // Keep a real gutter inside every span. At six columns, using almost the
+            // entire cell lets focused tiles and the dock highlight collide with the
+            // RecyclerView's clipped edges on narrower Fire TV output modes.
+            // RecyclerView gives each tile a full grid span. Use that real span rather than
+            // a fixed 180dp tile: at 5+ columns a fixed-width card and focus scale overlap
+            // neighboring cells on Fire TV's narrower logical display sizes.
+            int available = item.getWidth() - Math.round(16f * density);
+            if (available <= 0) return;
+            int tileWidth = Math.min(Math.round(180f * density), available);
+            int tileHeight = Math.max(Math.round(44f * density), Math.round(tileWidth * 9f / 16f));
+
+            ViewGroup.LayoutParams cardParams = card.getLayoutParams();
+            if (cardParams.width != tileWidth || cardParams.height != tileHeight) {
+                cardParams.width = tileWidth;
+                cardParams.height = tileHeight;
+                card.setLayoutParams(cardParams);
+            }
+            ViewGroup.LayoutParams nameParams = name.getLayoutParams();
+            int nameTop = tileHeight + Math.round(7f * density);
+            if (nameParams.width != tileWidth || nameParams.height != Math.round(22f * density)
+                    || ((ViewGroup.MarginLayoutParams) nameParams).topMargin != nameTop) {
+                nameParams.width = tileWidth;
+                nameParams.height = Math.round(22f * density);
+                if (nameParams instanceof ViewGroup.MarginLayoutParams) {
+                    ((ViewGroup.MarginLayoutParams) nameParams).topMargin = nameTop;
+                }
+                name.setLayoutParams(nameParams);
+            }
+            // Scale the actual drawable viewport with the tile, not just the card. This keeps
+            // fallback app-icon artwork legible at high column counts and preserves its aspect ratio.
+            int iconSize = Math.max(Math.round(20f * density), Math.min(Math.round(64f * density),
+                    Math.round(tileWidth * 0.42f)));
+            ViewGroup.LayoutParams iconParams = icon.getLayoutParams();
+            if (iconParams.width != iconSize || iconParams.height != iconSize) {
+                iconParams.width = iconSize;
+                iconParams.height = iconSize;
+                icon.setLayoutParams(iconParams);
+            }
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            banner.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        }
+
         Holder(View v, TileListener listener) {
             super(v);
             card = v.findViewById(R.id.card);
@@ -271,6 +327,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
             Fonts.apply(v);
+            v.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                    resizeTile(view));
 
             final float density = v.getResources().getDisplayMetrics().density;
             final float radius = density * 16f;

@@ -1,0 +1,4 @@
+# Optional extra hostnames, one per line.
+# The setup script already imports HaGeZi's Amazon-only domain list.
+# Add only reviewed exact hostnames here; do not use wildcard or adblock syntax.
+# DNS filtering can break app features, and the Amazon-only list also blocks updates.
