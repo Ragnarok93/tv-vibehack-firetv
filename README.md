@@ -181,3 +181,45 @@ MIT, see [`LICENSE`](LICENSE). The Outfit typeface is under the SIL Open Font Li
 The launcher can use [AerialViews](https://github.com/Ragnarok93/AerialViews) as its video-background source. Install AerialViews alongside the launcher; the launcher reads the media catalogue from AerialViews and plays video items behind the existing tiles. The background player stops when the launcher is paused, and a missing or unconfigured AerialViews installation leaves the launcher usable with its normal black background.
 
 After the configured idle delay (10 minutes by default), the launcher starts AerialViews' full-screen screensaver. Any remote-control interaction resets the idle timer. Both features can be disabled from Launcher settings. The current integration is video-background playback; image rows are not yet rendered by the launcher.
+
+## Privacy tools for Fire OS 6
+
+These are **optional companion scripts**, not code bundled into the launcher APK. They target the Toshiba Fire TV build we have identified (AFTBAMR311, Fire OS 6.7.1.1 / Android 7.1.2, API 25, build NS6711). They refuse to run on other API/build combinations.
+
+### Additional Amazon telemetry packages
+
+The existing debloat-ads.txt and debloat-speed.txt remain unchanged by the optional extras. debloat/fireos6-extra-packages.txt contains extra package candidates adapted from [dumbtv's Fire OS 6 list](https://github.com/humblemuzzu/dumbtv/blob/main/data/fireos6/packages.txt). dumbtv checked that list on a Fire TV Stick 4K, not this Toshiba television, so these candidates are opt-in and checked against the connected TV before changes.
+
+First preview, then apply:
+
+```bash
+TV_HOST=192.168.0.108 bash debloat/apply-fireos6-extras.sh --dry-run
+TV_HOST=192.168.0.108 bash debloat/apply-fireos6-extras.sh
+```
+
+The script asks before disabling packages, and disables only listed packages that are installed. It never uninstalls packages. To re-enable every package in this optional list:
+
+```bash
+TV_HOST=192.168.0.108 bash debloat/restore-fireos6-extras.sh
+```
+
+The optional list covers ad-token services, watch-engagement tracking, additional telemetry/logging, and experiment/remote-config services. It deliberately excludes the Wi-Fi locker, core metrics/crash components known to be protected, the Appstore, the launcher, input services, and the OTA updater. Package presence and behavior can differ by TV firmware; test Wi-Fi, Home, Settings, Appstore and streaming apps after applying.
+
+### personalDNSfilter
+
+personalDNSfilter is a separate third-party app and local VPN; it is **not embedded in the launcher APK**. The installer downloads a pinned F-Droid APK and checks its SHA-256, fetches HaGeZi's Amazon-only domain list, writes the list/config through the existing ADB client, and sets the VPN app-op and boot whitelist where supported.
+
+```bash
+TV_HOST=192.168.0.108 bash privacy/install-personaldnsfilter.sh
+TV_HOST=192.168.0.108 bash privacy/verify-personaldnsfilter.sh
+```
+
+The installer asks for confirmation and does not reboot automatically. If Fire OS displays a VPN consent prompt, approve it on the TV. Disable the filter with:
+
+```bash
+TV_HOST=192.168.0.108 bash privacy/disable-personaldnsfilter.sh
+```
+
+**Important:** the Amazon-only blocklist also blocks some Amazon update endpoints. Keep that in mind before manually updating Fire OS. DNS filtering cannot reliably remove YouTube ads because YouTube ads and video delivery share infrastructure. Tubi and Pluto TV may be partially affected only when ad requests use separate domains; playback can break if a required host is blocked. The smoke test checks one Amazon update host and that YouTube resolves, but it does not guarantee every app works or that all ads are blocked.
+
+The blocklist is generated from HaGeZi's native.amazon-onlydomains.txt; reviewed additional hostnames can be added one per line to privacy/amazon-extra-hosts.txt. Do not add wildcard syntax or copy large third-party lists without testing them.
