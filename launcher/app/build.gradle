@@ -12,7 +12,7 @@ android {
         targetSdk 29
         // Increment for every installable release; never reuse a published versionCode.
         versionCode 5
-        versionName '2.2-fire'
+        versionName '2.3-fire'
     }
 
     buildTypes {
