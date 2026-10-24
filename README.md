@@ -77,7 +77,7 @@ That applies both lists, turns off interest-based ads and halves animation lengt
 TV_HOST=192.168.1.50 launcher/build-and-install-fire.sh
 ```
 
-This builds the APK, installs it, grants its two special permissions over ADB (`READ_LOGS` with `pm grant`, `SYSTEM_ALERT_WINDOW` with `appops`), and starts the fast-Home helper (see below). Set your dock, hidden apps and TV-button app in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml), then run the script again.
+This builds the APK, installs it, grants its two special permissions over ADB (`READ_LOGS` with `pm grant`, `SYSTEM_ALERT_WINDOW` with `appops`), and starts the fast-Home helper (see below). The launcher now has its own **Launcher** button beside the Android **Settings** button. Its remote-friendly menu lets you toggle the AerialViews video background and idle screensaver, choose the screensaver delay, change grid columns, include phone-only apps, and edit dock/hidden package lists and the Live TV package. These choices are saved on the TV; the values in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml) remain the defaults and can still be edited before building.
 
 ![App grid](screenshots/grid.jpg)
 
@@ -178,4 +178,4 @@ MIT, see [`LICENSE`](LICENSE). The Outfit typeface is under the SIL Open Font Li
 
 The launcher can use [AerialViews](https://github.com/Ragnarok93/AerialViews) as its video-background source. Install AerialViews alongside the launcher; the launcher reads the media catalogue from AerialViews and plays video items behind the existing tiles. The background player stops when the launcher is paused, and a missing or unconfigured AerialViews installation leaves the launcher usable with its normal black background.
 
-After ten minutes without launcher interaction, the launcher starts AerialViews' full-screen screensaver. Any remote-control interaction resets the idle timer. The current integration is video-background playback; image rows are not yet rendered by the launcher.
+After the configured idle delay (10 minutes by default), the launcher starts AerialViews' full-screen screensaver. Any remote-control interaction resets the idle timer. Both features can be disabled from Launcher settings. The current integration is video-background playback; image rows are not yet rendered by the launcher.
