@@ -20,7 +20,7 @@
 
 ---
 
-**Execution status (2026-10-24):** The implementation is committed on feature branches and draft PRs are open: [launcher PR #1](https://github.com/Ragnarok93/tv-vibehack-firetv/pull/1) and [AerialViews PR #1](https://github.com/Ragnarok93/AerialViews/pull/1). Local builds, automated tests, and Fire TV runtime verification remain unverified because the available GitHub Actions workflow is manual-only and no workflow-dispatch action is exposed by the connected GitHub tools.
+**Execution status (2026-10-24):** The implementation is committed on feature branches and draft PRs are open: [launcher PR #1](https://github.com/Ragnarok93/tv-vibehack-firetv/pull/1) and [AerialViews PR #1](https://github.com/Ragnarok93/AerialViews/pull/1). The launcher debug APK build is verified by GitHub Actions run #2 (`BUILD SUCCESSFUL`). AerialViews unit tests, Spotless, and beta debug assembly remain unverified because its workflow is manual-only and the connected GitHub tools do not expose workflow dispatch. Fire TV runtime verification also remains outstanding.
 
 ### Task 1: Expose a secure AerialViews media catalogue
 
