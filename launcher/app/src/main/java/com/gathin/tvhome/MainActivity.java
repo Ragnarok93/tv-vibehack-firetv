@@ -1046,7 +1046,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             list.setItemChecked(selectedIndex[0], true);
             list.setSelection(selectedIndex[0]);
         };
-        Runnable moveSelected = () -> { };
         moveUp.setOnClickListener(v -> {
             int index = selectedIndex[0];
             if (index <= 0) return;
