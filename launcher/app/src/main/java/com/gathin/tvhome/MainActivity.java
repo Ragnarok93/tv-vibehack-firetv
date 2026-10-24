@@ -60,6 +60,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
     private static final long MINUTE_MS = 60_000L;
+    private static final long SCREENSAVER_IDLE_MS = 10 * MINUTE_MS;
+    private static final String AERIAL_VIEWS_PACKAGE = "com.neilturner.aerialviews";
+    private static final String AERIAL_VIEWS_SCREENSAVER_ACTION = "com.gathin.tvhome.action.START_SCREENSAVER";
+    private boolean launcherResumed;
+    private final Runnable launchAerialViewsScreensaver = () -> {
+        if (!launcherResumed || isFinishing()) return;
+        try {
+            getPackageManager().getApplicationInfo(AERIAL_VIEWS_PACKAGE, 0);
+            Intent screensaver = new Intent(AERIAL_VIEWS_SCREENSAVER_ACTION)
+                    .setClassName(AERIAL_VIEWS_PACKAGE, AERIAL_VIEWS_PACKAGE + ".ui.screensaver.TestActivity");
+            startActivity(screensaver);
+        } catch (PackageManager.NameNotFoundException | ActivityNotFoundException | SecurityException ignored) {
+            // AerialViews is optional; the launcher must remain usable without it.
+        }
+    };
     private String liveTvPkg;
 
     private AppAdapter adapter;
@@ -180,6 +195,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        launcherResumed = true;
+        handler.removeCallbacks(launchAerialViewsScreensaver);
+        handler.postDelayed(launchAerialViewsScreensaver, SCREENSAVER_IDLE_MS);
         glassShown = false;
         glass.setAlpha(0f);
         heroShown = false;
@@ -205,6 +223,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        launcherResumed = false;
+        handler.removeCallbacks(launchAerialViewsScreensaver);
         handler.removeCallbacks(minuteTick);
         handler.removeCallbacks(dropHomeOverlay);
         if (root.getWidth() > 0 && root.getHeight() > 0) {
@@ -213,6 +233,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             root.draw(new Canvas(snapshot));
             HomeKeyService.setSnapshot(snapshot);
+        }
+    }
+
+    @Override
+    public void onUserInteraction() {
+        super.onUserInteraction();
+        if (launcherResumed) {
+            handler.removeCallbacks(launchAerialViewsScreensaver);
+            handler.postDelayed(launchAerialViewsScreensaver, SCREENSAVER_IDLE_MS);
         }
     }
 
