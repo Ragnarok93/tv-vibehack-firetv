@@ -3,7 +3,7 @@
 ## Invariants
 
 - Keep `applicationId` as `com.gathin.tvhome` for upgrades over the existing launcher.
-- Keep using the same signing certificate for every installable launcher APK. The local `assembleDebug` workflow and `build-and-install-fire.sh` use the machine's persistent Android debug keystore. Do not delete or regenerate that keystore if you need to upgrade an APK signed by it.
+- Keep using the same signing certificate for every installable launcher APK. The local `assembleDebug` workflow and `build-and-install-fire.sh` use the machine's persistent Android debug keystore. The install script now stops if it is missing, rather than silently creating a new signer. Do not delete or regenerate that keystore if you need to upgrade an APK signed by it. For a deliberate first install on a new machine only, set `ALLOW_NEW_DEBUG_KEYSTORE=1`.
 - Increase `versionCode` for every distributed release. The current branch starts at version code 5 / version name `2.3-fire`, above the previous version code 4.
 - Use `adb install -r` / `pm install -r` for upgrades. Do not uninstall first, because uninstalling can remove app data and permissions.
 
