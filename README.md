@@ -173,3 +173,9 @@ Tried this on another Fire TV? Open an issue or a pull request with the model, F
 ## Licence
 
 MIT, see [`LICENSE`](LICENSE). The Outfit typeface is under the SIL Open Font License (`launcher/FONT-LICENSE-OFL.txt`).
+
+## AerialViews background and screensaver
+
+The launcher can use [AerialViews](https://github.com/Ragnarok93/AerialViews) as its video-background source. Install AerialViews alongside the launcher; the launcher reads the media catalogue from AerialViews and plays video items behind the existing tiles. The background player stops when the launcher is paused, and a missing or unconfigured AerialViews installation leaves the launcher usable with its normal black background.
+
+After ten minutes without launcher interaction, the launcher starts AerialViews' full-screen screensaver. Any remote-control interaction resets the idle timer. The current integration is video-background playback; image rows are not yet rendered by the launcher.
