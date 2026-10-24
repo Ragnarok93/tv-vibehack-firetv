@@ -120,7 +120,8 @@ for line in lines:
     if line.startswith("filterAutoUpdateURL = "):
         out.append("#" + line)
         continue
-    key = line.split(" = ", 1)[0] if " = " in line else ""
+    # Accept empty settings such as upstream `routeIPs =` (no value after the equals sign).
+    key = line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else ""
     if key in wanted:
         out.append(key + " = " + wanted[key])
         seen.add(key)
