@@ -12,6 +12,16 @@ fi
 export JAVA_HOME
 export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
 export PATH="$JAVA_HOME/bin:$PATH"
+
+# Do not silently let Gradle create a new debug keystore: that would change the
+# signing certificate and make the APK impossible to install as an update.
+DEBUG_KEYSTORE="${ANDROID_USER_HOME:-$HOME/.android}/debug.keystore"
+if [ ! -f "$DEBUG_KEYSTORE" ] && [ "${ALLOW_NEW_DEBUG_KEYSTORE:-0}" != "1" ]; then
+  echo "Missing persistent Android debug keystore: $DEBUG_KEYSTORE" >&2
+  echo "Restore the keystore used for prior installs, or explicitly set ALLOW_NEW_DEBUG_KEYSTORE=1 for a first install." >&2
+  exit 1
+fi
+
 [ -f local.properties ] || echo "sdk.dir=$ANDROID_HOME" > local.properties
 ./gradlew assembleDebug -q --console=plain
 PY=../tools/venv/bin/python

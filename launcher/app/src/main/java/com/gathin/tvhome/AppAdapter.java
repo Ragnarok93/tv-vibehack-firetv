@@ -28,7 +28,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import android.content.SharedPreferences;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -70,24 +70,53 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final TileListener listener;
     private final int dockSize;
     /** Dock order (res/values/config.xml, dock_apps). */
-    private final List<String> favourites;
+    private List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
-    private final Set<String> hidden;
+    private Set<String> hidden;
     private final List<Entry> items = new ArrayList<>();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize) {
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
-        this.favourites = Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps));
-        this.hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
+        loadConfig();
+    }
+
+    private void loadConfig() {
+        SharedPreferences prefs = ctx.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE);
+        favourites = parsePackages(prefs.getString("dock_apps",
+                joinPackages(ctx.getResources().getStringArray(R.array.dock_apps))));
+        hidden = new HashSet<>(parsePackages(prefs.getString("hidden_apps",
+                joinPackages(ctx.getResources().getStringArray(R.array.hidden_apps)))));
+    }
+
+    private static List<String> parsePackages(String value) {
+        List<String> packages = new ArrayList<>();
+        if (value == null || value.trim().isEmpty()) return packages;
+        for (String part : value.split(",")) {
+            String pkg = part.trim();
+            if (!pkg.isEmpty() && !packages.contains(pkg)) packages.add(pkg);
+        }
+        return packages;
+    }
+
+    private static String joinPackages(String[] packages) {
+        StringBuilder joined = new StringBuilder();
+        for (String pkg : packages) {
+            if (joined.length() > 0) joined.append(',');
+            joined.append(pkg);
+        }
+        return joined.toString();
     }
 
     void reload() {
+        loadConfig();
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         List<ResolveInfo> found = new ArrayList<>(pm.queryIntentActivities(probe, 0));
-        if (ctx.getResources().getBoolean(R.bool.include_phone_launcher_apps)) {
+        SharedPreferences prefs = ctx.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE);
+        if (prefs.getBoolean("include_phone_apps",
+                ctx.getResources().getBoolean(R.bool.include_phone_launcher_apps))) {
             found.addAll(pm.queryIntentActivities(
                     new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0));
         }

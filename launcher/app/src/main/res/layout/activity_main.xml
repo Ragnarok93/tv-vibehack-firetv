@@ -138,6 +138,14 @@
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
+                    android:id="@+id/btnLauncherSettings"
+                    style="@style/TopButton"
+                    android:contentDescription="@string/launcher_settings"
+                    android:text="@string/launcher_settings_short"
+                    android:drawableStart="@drawable/ic_launcher_settings"
+                    android:nextFocusDown="@+id/grid" />
+
+                <TextView
                     android:id="@+id/btnSettings"
                     style="@style/TopButton"
                     android:text="@string/settings"

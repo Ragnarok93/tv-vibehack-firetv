@@ -1,0 +1,34 @@
+name: Launcher Android build
+
+on:
+  pull_request:
+    paths:
+      - "launcher/**"
+      - ".github/workflows/launcher-android-build.yml"
+  push:
+    branches:
+      - main
+      - "feature/**"
+    paths:
+      - "launcher/**"
+      - ".github/workflows/launcher-android-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  assemble-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Assemble launcher APK
+        working-directory: launcher
+        run: ./gradlew --no-daemon assembleDebug
