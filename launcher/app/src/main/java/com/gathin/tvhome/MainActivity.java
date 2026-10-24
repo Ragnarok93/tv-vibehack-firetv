@@ -320,6 +320,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                         backgroundPlayerView.setPlayer(null);
                         player.release();
                     }
+                    // If AerialViews has no playable videos, return to the regular launcher look.
+                    if (launcherResumed && items.isEmpty() && heroShown) {
+                        ambient.animate().cancel();
+                        ambient.animate().alpha(1f).setDuration(300).start();
+                    }
                     return;
                 }
                 player.setVolume(0f);
