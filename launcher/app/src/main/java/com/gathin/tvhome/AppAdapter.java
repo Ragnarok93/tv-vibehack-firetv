@@ -277,7 +277,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
         void resizeTile(View item) {
             float density = item.getResources().getDisplayMetrics().density;
-            int available = item.getWidth() - Math.round(12f * density);
+            // Keep a real gutter inside every span. At six columns, using almost the
+            // entire cell lets focused tiles and the dock highlight collide with the
+            // RecyclerView's clipped edges on narrower Fire TV output modes.
+            int available = item.getWidth() - Math.round(24f * density);
             if (available <= 0) return;
             int tileWidth = Math.min(Math.round(180f * density), available);
 
@@ -290,6 +293,13 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             if (nameParams.width != tileWidth) {
                 nameParams.width = tileWidth;
                 name.setLayoutParams(nameParams);
+            }
+            int iconSize = Math.min(Math.round(48f * density), Math.round(tileWidth * 0.28f));
+            ViewGroup.LayoutParams iconParams = icon.getLayoutParams();
+            if (iconParams.width != iconSize || iconParams.height != iconSize) {
+                iconParams.width = iconSize;
+                iconParams.height = iconSize;
+                icon.setLayoutParams(iconParams);
             }
         }
 
