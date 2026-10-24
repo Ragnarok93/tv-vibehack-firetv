@@ -1,6 +1,7 @@
 package com.gathin.tvhome;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -25,12 +26,15 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.content.SharedPreferences;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -68,12 +72,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
     private static final long MINUTE_MS = 60_000L;
-    private static final long SCREENSAVER_IDLE_MS = 10 * MINUTE_MS;
+    private static final long DEFAULT_SCREENSAVER_IDLE_MS = 10 * MINUTE_MS;
+    private static final String PREFS = "launcher_settings";
+    private static final String PREF_BACKGROUND = "aerial_background_enabled";
+    private static final String PREF_SCREENSAVER = "aerial_screensaver_enabled";
+    private static final String PREF_SCREENSAVER_DELAY = "screensaver_delay_minutes";
+    private static final String PREF_INCLUDE_PHONE_APPS = "include_phone_apps";
+    private static final String PREF_DOCK_APPS = "dock_apps";
+    private static final String PREF_HIDDEN_APPS = "hidden_apps";
+    private static final String PREF_LIVE_TV_PACKAGE = "live_tv_package";
+    private static final String PREF_COLUMNS = "columns";
     private static final String AERIAL_VIEWS_PACKAGE = "com.neilturner.aerialviews";
     private static final String AERIAL_VIEWS_SCREENSAVER_ACTION = "com.gathin.tvhome.action.START_SCREENSAVER";
     private boolean launcherResumed;
     private final Runnable launchAerialViewsScreensaver = () -> {
-        if (!launcherResumed || isFinishing()) return;
+        if (!launcherResumed || isFinishing() || !getPreferencesStore().getBoolean(PREF_SCREENSAVER, true)) return;
         try {
             getPackageManager().getApplicationInfo(AERIAL_VIEWS_PACKAGE, 0);
             Intent screensaver = new Intent(AERIAL_VIEWS_SCREENSAVER_ACTION)
@@ -84,6 +97,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     };
     private String liveTvPkg;
+    private PopupWindow launcherSettingsPopup;
 
     private AppAdapter adapter;
     private RecyclerView grid;
@@ -123,7 +137,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
         COLUMNS = Math.max(1, getResources().getInteger(R.integer.columns));
-        liveTvPkg = getString(R.string.live_tv_package).trim();
+        liveTvPkg = getPreferencesStore().getString(PREF_LIVE_TV_PACKAGE, getString(R.string.live_tv_package)).trim();
 
         HomeKeyService.start(this);
         root = findViewById(R.id.root);
@@ -189,9 +203,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         View btnInputs = findViewById(R.id.btnInputs);
         View btnSettings = findViewById(R.id.btnSettings);
+        View btnLauncherSettings = findViewById(R.id.btnLauncherSettings);
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         btnSettings.setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        btnLauncherSettings.setOnClickListener(v -> showLauncherSettings());
 
         // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
         // jump to a tile far below when there is nothing in that direction.
@@ -204,6 +220,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
+        btnLauncherSettings.setOnKeyListener(pillKeys);
 
         // Hide the glass when focus leaves the tiles.
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
@@ -217,7 +234,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onResume();
         launcherResumed = true;
         handler.removeCallbacks(launchAerialViewsScreensaver);
-        handler.postDelayed(launchAerialViewsScreensaver, SCREENSAVER_IDLE_MS);
+        handler.postDelayed(launchAerialViewsScreensaver, screensaverDelayMs());
         startBackgroundPlayback();
         glassShown = false;
         glass.setAlpha(0f);
@@ -259,7 +276,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void startBackgroundPlayback() {
-        if (backgroundPlayer != null) return;
+        if (backgroundPlayer != null || !getPreferencesStore().getBoolean(PREF_BACKGROUND, true)) return;
         ExoPlayer player = new ExoPlayer.Builder(this).build();
         backgroundPlayer = player;
         backgroundPlayerView.setPlayer(player);
@@ -322,7 +339,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onUserInteraction();
         if (launcherResumed) {
             handler.removeCallbacks(launchAerialViewsScreensaver);
-            handler.postDelayed(launchAerialViewsScreensaver, SCREENSAVER_IDLE_MS);
+            handler.postDelayed(launchAerialViewsScreensaver, screensaverDelayMs());
         }
     }
 
@@ -518,6 +535,191 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } catch (ActivityNotFoundException | SecurityException e) {
             Toast.makeText(this, "Not available on this TV", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private SharedPreferences getPreferencesStore() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private long screensaverDelayMs() {
+        int minutes = getPreferencesStore().getInt(PREF_SCREENSAVER_DELAY,
+                (int) (DEFAULT_SCREENSAVER_IDLE_MS / MINUTE_MS));
+        return Math.max(1, minutes) * MINUTE_MS;
+    }
+
+    /** TV-remote-friendly launcher configuration menu, separate from Android system Settings. */
+    private void showLauncherSettings() {
+        View anchor = findViewById(R.id.btnLauncherSettings);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding((int) (6 * density), (int) (6 * density),
+                (int) (6 * density), (int) (6 * density));
+        panel.setBackgroundResource(R.drawable.glass_panel);
+        panel.setElevation(12 * density);
+        launcherSettingsPopup = new PopupWindow(panel, (int) (340 * density),
+                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        launcherSettingsPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        launcherSettingsPopup.setOutsideTouchable(true);
+        launcherSettingsPopup.setAnimationStyle(0);
+        launcherSettingsPopup.setElevation(0f);
+
+        SharedPreferences prefs = getPreferencesStore();
+        boolean background = prefs.getBoolean(PREF_BACKGROUND, true);
+        boolean screensaver = prefs.getBoolean(PREF_SCREENSAVER, true);
+        boolean phoneApps = prefs.getBoolean(PREF_INCLUDE_PHONE_APPS,
+                getResources().getBoolean(R.bool.include_phone_launcher_apps));
+        int delay = prefs.getInt(PREF_SCREENSAVER_DELAY,
+                (int) (DEFAULT_SCREENSAVER_IDLE_MS / MINUTE_MS));
+        int columns = prefs.getInt(PREF_COLUMNS, getResources().getInteger(R.integer.columns));
+
+        addLauncherSettingRow(panel, "AerialViews video background", background ? "On" : "Off",
+                () -> { prefs.edit().putBoolean(PREF_BACKGROUND, !background).apply(); refreshLauncherSettings(); });
+        addLauncherSettingRow(panel, "AerialViews screensaver", screensaver ? "On" : "Off",
+                () -> { prefs.edit().putBoolean(PREF_SCREENSAVER, !screensaver).apply(); refreshLauncherSettings(); });
+        addLauncherSettingRow(panel, "Screensaver idle delay", delay + " min  ›",
+                () -> {
+                    int[] values = new int[]{5, 10, 15, 30, 60};
+                    int next = values[0];
+                    for (int i = 0; i < values.length; i++) {
+                        if (values[i] == delay) { next = values[(i + 1) % values.length]; break; }
+                        if (i == values.length - 1) next = values[0];
+                    }
+                    prefs.edit().putInt(PREF_SCREENSAVER_DELAY, next).apply();
+                    handler.removeCallbacks(launchAerialViewsScreensaver);
+                    if (launcherResumed && prefs.getBoolean(PREF_SCREENSAVER, true))
+                        handler.postDelayed(launchAerialViewsScreensaver, screensaverDelayMs());
+                    refreshLauncherSettings();
+                });
+        addLauncherSettingRow(panel, "Include phone-only apps", phoneApps ? "On" : "Off",
+                () -> {
+                    prefs.edit().putBoolean(PREF_INCLUDE_PHONE_APPS, !phoneApps).apply();
+                    adapter.reload();
+                    refreshLauncherSettings();
+                });
+        addLauncherSettingRow(panel, "Grid columns", columns + "  ›", () -> {
+            int[] values = new int[]{3, 4, 5, 6};
+            int next = values[0];
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == columns) { next = values[(i + 1) % values.length]; break; }
+                if (i == values.length - 1) next = values[0];
+            }
+            prefs.edit().putInt(PREF_COLUMNS, next).apply();
+            COLUMNS = next;
+            grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
+            while (grid.getItemDecorationCount() > 0) grid.removeItemDecorationAt(0);
+            grid.addItemDecoration(new DockDecoration(COLUMNS, density));
+            adapter = new AppAdapter(this, this, COLUMNS);
+            grid.setAdapter(adapter);
+            adapter.reload();
+            refreshLauncherSettings();
+        });
+        addLauncherSettingRow(panel, "Dock app packages", "Edit  ›",
+                () -> editPackageList("Dock app packages", PREF_DOCK_APPS, R.array.dock_apps));
+        addLauncherSettingRow(panel, "Hidden app packages", "Edit  ›",
+                () -> editPackageList("Hidden app packages", PREF_HIDDEN_APPS, R.array.hidden_apps));
+        addLauncherSettingRow(panel, "Live TV app package", liveTvPkg.isEmpty() ? "Not set" : "Edit  ›",
+                () -> editLiveTvPackage());
+
+        panel.setAlpha(0f);
+        panel.setPivotY(0f);
+        panel.setScaleY(0.92f);
+        panel.setTranslationY(-8 * density);
+        launcherSettingsPopup.showAsDropDown(anchor, 0, (int) (10 * density), Gravity.END);
+        panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(180).start();
+        if (panel.getChildCount() > 0) panel.getChildAt(0).requestFocus();
+    }
+
+    private void addLauncherSettingRow(LinearLayout panel, String label, String value, Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding((int) (12 * density), 0, (int) (12 * density), 0);
+        row.setMinimumHeight((int) (44 * density));
+        row.setFocusable(true);
+        row.setClickable(true);
+        row.setBackgroundResource(R.drawable.input_row_bg);
+
+        TextView title = new TextView(this);
+        title.setText(label);
+        title.setTextColor(getColorCompat(0xFFFFFFFF));
+        title.setTextSize(14);
+        title.setSingleLine(true);
+        title.setTag("w500");
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        row.addView(title, titleParams);
+
+        TextView status = new TextView(this);
+        status.setText(value);
+        status.setTextColor(getColorCompat(0xB3FFFFFF));
+        status.setTextSize(12);
+        status.setSingleLine(true);
+        status.setTag("w400");
+        row.addView(status, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Fonts.apply(row);
+        row.setOnClickListener(v -> action.run());
+        panel.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private int getColorCompat(int color) {
+        return color;
+    }
+
+    private void refreshLauncherSettings() {
+        if (launcherSettingsPopup != null && launcherSettingsPopup.isShowing()) launcherSettingsPopup.dismiss();
+        showLauncherSettings();
+    }
+
+    private void editPackageList(String title, String key, int defaultArray) {
+        if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
+        String current = getPreferencesStore().getString(key,
+                String.join(",", getResources().getStringArray(defaultArray)));
+        EditText input = new EditText(this);
+        input.setSingleLine(false);
+        input.setMinLines(2);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        input.setText(current);
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage("Comma-separated Android package names")
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, (d, w) -> showLauncherSettings())
+                .setNeutralButton("Reset", (d, w) -> {
+                    getPreferencesStore().edit().remove(key).apply();
+                    adapter.reload();
+                    showLauncherSettings();
+                })
+                .setPositiveButton("Save", (d, w) -> {
+                    getPreferencesStore().edit().putString(key, input.getText().toString().trim()).apply();
+                    adapter.reload();
+                    showLauncherSettings();
+                }).show();
+    }
+
+    private void editLiveTvPackage() {
+        if (launcherSettingsPopup != null) launcherSettingsPopup.dismiss();
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setHint("com.example.livetv");
+        input.setText(liveTvPkg);
+        new AlertDialog.Builder(this)
+                .setTitle("Live TV app package")
+                .setMessage("Leave blank to disable the Live TV shortcut.")
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, (d, w) -> showLauncherSettings())
+                .setNeutralButton("Reset", (d, w) -> {
+                    liveTvPkg = getString(R.string.live_tv_package).trim();
+                    getPreferencesStore().edit().remove(PREF_LIVE_TV_PACKAGE).apply();
+                    showLauncherSettings();
+                })
+                .setPositiveButton("Save", (d, w) -> {
+                    liveTvPkg = input.getText().toString().trim();
+                    getPreferencesStore().edit().putString(PREF_LIVE_TV_PACKAGE, liveTvPkg).apply();
+                    showLauncherSettings();
+                }).show();
     }
 
     /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */
