@@ -157,17 +157,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         HomeKeyService.start(this);
         root = findViewById(R.id.root);
-        backgroundPlayerView = new PlayerView(this);
+        backgroundPlayerView = findViewById(R.id.backgroundPlayerView);
         backgroundPlayerView.setUseController(false);
-        backgroundPlayerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_ZOOM);
         backgroundPlayerView.setKeepContentOnPlayerReset(true);
         backgroundPlayerView.setFocusable(false);
         backgroundPlayerView.setFocusableInTouchMode(false);
-        backgroundTextureView = new TextureView(this);
-        backgroundPlayerView.setVideoTextureView(backgroundTextureView);
+        backgroundTextureView = findTextureView(backgroundPlayerView);
         backgroundPlayerView.setVisibility(View.GONE);
-        root.addView(backgroundPlayerView, 0, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         Fonts.apply(root);
         glass = findViewById(R.id.glass);
         ambient = findViewById(R.id.ambient);
@@ -359,6 +355,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
+    private TextureView findTextureView(View view) {
+        if (view instanceof TextureView) return (TextureView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                TextureView found = findTextureView(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private boolean isAerialBackgroundActive() {
         return backgroundPlayer != null && backgroundPlayer.isPlaying()
                 && backgroundPlayerView != null && backgroundPlayerView.getVisibility() == View.VISIBLE;
@@ -384,8 +392,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
         frame.recycle();
-        // A little hysteresis around the midpoint avoids flicker between adjacent frames.
-        int nextColor = luminance / Math.max(1, count) >= 150 ? 0xFF111111 : Color.WHITE;
+        long averageLuminance = luminance / Math.max(1, count);
+        // Separate switch-on/off thresholds prevent rapid color flips around the midpoint.
+        int nextColor;
+        if (overlayTextColor == Color.WHITE) {
+            nextColor = averageLuminance >= 160 ? 0xFF111111 : Color.WHITE;
+        } else {
+            nextColor = averageLuminance <= 135 ? Color.WHITE : 0xFF111111;
+        }
         applyOverlayTextColor(nextColor);
     }
 
